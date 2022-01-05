@@ -18,6 +18,9 @@ public class Main {
 
         Seller proxy = factory.getProxy();
         Book book = proxy.getBook(10000L);
+
+        System.out.println("\n******************************************************************************************************\n");
+
         String bookName = proxy.getBookName(10000L);
 
 

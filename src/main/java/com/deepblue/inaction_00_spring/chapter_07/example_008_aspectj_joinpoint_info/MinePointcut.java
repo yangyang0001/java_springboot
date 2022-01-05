@@ -9,4 +9,7 @@ public class MinePointcut {
 
     @Pointcut("execution(* getBook(..))")
     public void getBook() {}
+
+    @Pointcut("@annotation(Mine)")
+    public void mine() {}
 }

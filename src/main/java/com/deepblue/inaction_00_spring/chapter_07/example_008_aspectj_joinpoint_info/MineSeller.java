@@ -16,6 +16,7 @@ public class MineSeller implements Seller{
         return book;
     }
 
+    @Mine(value = "getBookName")
     @Override
     public String getBookName(long bookId) {
         if(bookId == 10000L) {
