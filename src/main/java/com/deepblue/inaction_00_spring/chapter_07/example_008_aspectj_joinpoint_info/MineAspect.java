@@ -15,7 +15,7 @@ import org.aspectj.lang.annotation.Before;
 public class MineAspect {
 
     @Around("MinePointcut.getBook()")
-    public void around(ProceedingJoinPoint joinPoint) throws Throwable {
+    public Object around(ProceedingJoinPoint joinPoint) throws Throwable {
         System.out.println("mine aspect around method invoke start!");
 
         Object[] args = joinPoint.getArgs();
@@ -27,9 +27,12 @@ public class MineAspect {
 
         Object proceed = joinPoint.proceed();
 
-        System.out.println("around proceed    is :" + JSON.toJSONString(proceed));
+        System.out.println("around proceed   is :" + JSON.toJSONString(proceed));
 
         System.out.println("mine aspect around method invoke end!");
+
+        // TODO Around 环绕增强 设置返回值为 Object, Proxy 执行后将结果返回!
+        return proceed;
     }
 
     @Before("MinePointcut.mine()")
