@@ -20,9 +20,18 @@
     </properties>
 
     <dependencies>
+
+        <!-- Spring 中的 MVC 框架 -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+
+        <!-- Beetl 作为模板技术 -->
+        <dependency>
+            <groupId>com.ibeetl</groupId>
+            <artifactId>beetl-framework-starter</artifactId>
+            <version>1.2.40.Beetl.RELEASE</version>
         </dependency>
 
         <!-- 使用了热部署配置文件, 一旦 class 文件发生改变, 重新编译后会自动重启, TODO 工作中禁用 -->
@@ -45,35 +54,40 @@
             <version>1.2.68</version>
         </dependency>
 
-        <dependency>
-            <groupId>mysql</groupId>
-            <artifactId>mysql-connector-java</artifactId>
-            <version>6.0.5</version>
-        </dependency>
-
         <!-- AOP 的使用 -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-aop</artifactId>
         </dependency>
 
-        <!--
-        <dependency>
-            <groupId>org.aspectj</groupId>
-            <artifactId>aspectjweaver</artifactId>
-            <version>1.9.7</version>
-        </dependency>
-        <dependency>
-            <groupId>org.aspectj</groupId>
-            <artifactId>aspectjtools</artifactId>
-            <version>1.9.7</version>
-        </dependency>
-        -->
         <!-- lombok 的使用 -->
         <dependency>
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>
         </dependency>
+
+        <dependency>
+            <groupId>org.apache.commons</groupId>
+            <artifactId>commons-lang3</artifactId>
+            <version>3.12.0</version>
+        </dependency>
+
+        <!-- 数据源配置 -->
+        <dependency>
+            <groupId>mysql</groupId>
+            <artifactId>mysql-connector-java</artifactId>
+            <version>6.0.5</version>
+        </dependency>
+
+        <dependency>
+            <groupId>com.zaxxer</groupId>
+            <artifactId>HikariCP</artifactId>
+            <version>3.4.5</version>
+        </dependency>
+
+
+
+
 
     </dependencies>
 

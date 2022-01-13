@@ -12,8 +12,8 @@ public class HelloWorldController {
 
     @RequestMapping("/sayHello")
     @ResponseBody
-    public String sayHello() {
-        return "Hello Spring Boot";
+    public String sayHello(String name) {
+        return "Hello " + name;
     }
 
 }

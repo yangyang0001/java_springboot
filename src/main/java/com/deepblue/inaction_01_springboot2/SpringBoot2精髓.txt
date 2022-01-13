@@ -19,14 +19,36 @@ Bean 初始化和销毁:
     @Autowired
     private DataSourceConfig config1;
 
+Aspect 的学习, 参考 Spring3.x实战.txt 中的东西!
+
+---------------------------------------------------------------------------------------------------------------------------------------------
+-------------------------------------------------------------- 第3章 MVC 框架 ----------------------------------------------------------------
+---------------------------------------------------------------------------------------------------------------------------------------------
+配置 MVC 全局特性, 通过 implements WebMvcConfigurer 来实现, 参考 com.deepblue.inaction_01_springboot2.chapter_03.config.CommonWebMvcConfig
+
+拦截器: order 值越小 优先级越高; 参考: com.deepblue.inaction_01_springboot2.chapter_03.interceptor 中的例子!
+    PathPattern 类中的 正则匹配规则:
+    // 使用以下规则匹配 URL 路径:
+    <p>{@code PathPattern} matches URL paths using the following rules:<br>
+    <ul>
+        // ? 匹配一个字符
+        <li>{@code ?} matches one character</li>
+
+        // * 匹配路径段内的零个或多个字符
+        <li>{@code *} matches zero or more characters within a path segment</li>
+
+        // ** 匹配零个或多个<em>路径段</em>，直到路径结束
+        <li>{@code **} matches zero or more <em>path segments</em> until the end of the path</li>
+
+        <li><code>{spring}</code> matches a <em>path segment</em> and captures it as a variable named "spring"</li>
+        <li><code>{spring:[a-z]+}</code> matches the regexp {@code [a-z]+} as a path variable named "spring"</li>
+        <li><code>{*spring}</code> matches zero or more <em>path segments</em> until the end of the path and captures it as a variable named "spring"</li>
+    </ul>
 
 
-
-
-
-
-
-
+---------------------------------------------------------------------------------------------------------------------------------------------
+-------------------------------------------------------------- 第5章 数据库访问 ---------------------------------------------------------------
+---------------------------------------------------------------------------------------------------------------------------------------------
 
 
 
