@@ -296,7 +296,7 @@ TODO 我们该如何选择我们的存储引擎呢?
                 SHOW VARIABLES LIKE "max_heap_table_size";	-- 16777216 字节 = 16M
                 SHOW VARIABLES LIKE "tmp_table_size";		-- 16777216 字节 = 16M
 
-            如果 explain 执行计划的 extra 列包含 "Using temporary", 则说明这个查询使用了隐式临时表!
+            如果 explain 的 extra 列包含 "Using temporary", 则说明这个查询使用了隐式临时表!
 
     通用的设计实践, 在“查找表” 时采用 整数主键 而避免采用基于 字符串的值进行关联
 
@@ -418,7 +418,7 @@ TODO 我们该如何选择我们的存储引擎呢?
                 举例:
                     select * from people where first_name like "%b%" and birthday = "1960-01-01";
 
-            如果查询中有某个列的范围查询，则其右边所有列都无能使用索引优化查找
+            如果查询中有某个列的范围查询, 则其右边所有列都无能使用索引优化查找
                 举例:
                     select * from people where first_name like "C%" and birthday = "1960-01-01";
                     explain select * from people where first_name like "C%" and birthday = "1960-01-01";
@@ -427,12 +427,12 @@ TODO 我们该如何选择我们的存储引擎呢?
     Hash 索引 : 目前只有 Memory 存储引擎 能够支持 Hash 索引! Memory 存储引擎的特点: 一旦服务重启 数据完全丢失!
 
         创建表:
-            CREATE TABLE `testhash` (
-              `id` int NOT NULL AUTO_INCREMENT,
-              `first_name` varchar(255) DEFAULT NULL,
-              `last_name` varchar(255) DEFAULT NULL,
-              PRIMARY KEY (`id`),
-              KEY `idx_first_last` (`first_name`,`last_name`)
+            CREATE TABLE testhash (
+              id int NOT NULL AUTO_INCREMENT,
+              first_name varchar(255) DEFAULT NULL,
+              last_name varchar(255) DEFAULT NULL,
+              PRIMARY KEY (id),
+              KEY idx_first_last (first_name,last_name)
             ) ENGINE=MEMORY DEFAULT CHARSET=utf8mb3
 
         插入测试数据
@@ -487,6 +487,130 @@ TODO 我们该如何选择我们的存储引擎呢?
     2、索引可以帮助服务器避免排序和临时表
     3、索引可以将随机 I/O 变为 顺序 I/O
 
+高性能索引的使用策略
+    独立的列
+        如果 索引列 是表达式 或者 函数的一部分则不能使用 当前列的索引!
+        举例:
+            select * from test_actor where id + 1= 5;
+
+            // 这种如果在 actor_id 上有索引, 这种还是能够使用到索引的, 书籍中 列作为函数的一部分 并不正确!
+            select sum(actor_id = 120) from test_actor;
+
+    前缀索引 和 索引选择性
+        有时候需要在varchar(1000) 甚至更长的 字符串列上 创建索引, 这时候就需要使用到前缀索引, 前缀索引不能 参与 order by 和 group by 的查询!
+        举例:
+            算法:
+                完整列的选择性: select count(DISTINCT(city)) / count(*) from test_city;
+                前缀列的选择性: select count(DISTINCT(left(city, N))) / count(*) from test_city;
+
+            过程:
+                计算完整列选择性:
+                select count(DISTINCT(city)) / count(*) from test_city;             -- 1.0000
+
+                计算前缀列选择性: (N从3到8的查询)
+                select count(DISTINCT(left(city, 3))) / count(*) from test_city;    -- 0.7943
+                select count(DISTINCT(left(city, 4))) / count(*) from test_city;    -- 0.8857
+                select count(DISTINCT(left(city, 5))) / count(*) from test_city;    -- 0.9543
+                select count(DISTINCT(left(city, 6))) / count(*) from test_city;    -- 0.9829
+                select count(DISTINCT(left(city, 7))) / count(*) from test_city;    -- 0.9886
+                select count(DISTINCT(left(city, 8))) / count(*) from test_city;    -- 1.0000
+
+            结果:
+                不断尝试可以得到一个N值, 使第二个查询获得的值 和 第一个值更接近, 就可以创建索引了; 索引列为 city 长度为8就可以了
+
+        列的选择性算法: select count(distinct(colunm_name)) / count(*) from table_name; 值越大选择性越高!
+
+    多列索引
+        合并索引策略在 MySQL 4.1 版本之后 已经成为内置的优化项 (index merge), 一旦在 explain 的 Extra 列中出现 Using union(PRIMARY,idx_actor_id); Using where
+        往往意味着这索引建立的是有问题的, 单列索引, 不如搞个多列索引!
 
 
+    选择合适的索引列顺序
+        我们遇到的最容易引起困惑的问题就是索引列的顺序问题! 
+        确的顺序依赖于使用该索引的查询, 并且同时需要考虑如何更好地满足 排序和分组 的需要 (顺便说明, 本节内容适用于B-Tree索引; 哈希或者其他类型的索引 并不会像B-Tree索引一样按顺序存储数据)
 
+        除了列的选择性来 处理 查询列的顺序以外, 往往遇到具体的情况, 我们还需要看一下:
+        select sum(column_name = XXX) from table_name 到底有多少行记录, 如果行的记录太多, 说明这个列的散列性不强, 即 count(distinct(cloumn)) 不大!
+
+    聚簇索引
+        聚簇索引包含: 索引 + 整行的数据! 具体分布: 根节点 只包含 主键, 叶子节点包含 整行数据! 参考 05_高性能索引使用策略_聚簇索引的结构.png
+
+        创建表: 没有指定 存储引擎的类型 InnoDB 和 MyISA 均可
+            create table layout_test (
+                col1 int not null,
+                col2 int not null,
+                primary key (col1),
+                key(col2)
+            );
+
+        InnoDB 和 MyISAM 中 聚簇索引的数据结构、二级索引的数据结构! 请参考图
+
+        在 InnoDB 中 二级索引 存放了 索引列 和 主键列; 如果要通过 二级索引查找数据:
+            首先要通过 这个二级索引查找到对应的主键,  然后再通过 聚簇索引查找对应的数据行; 因此整个过程是经过两次 B-Tree 索引的查询!
+
+        聚簇索引在使用的时候的注意点:
+            插入时应尽量使用自增主键, 因为这样即符合 聚簇索引的创建顺序, 占用空间也是比较小的, 也防止了过多的节点的分裂, 一旦从之间分裂会造成大量数据的移动, 维护成本和产生碎片的可能会急剧增高!
+
+        聚簇索引在插入时可能遇到的问题:
+            AUTO_INCREMENT 会造成多个线程产生间隙锁的竞争! 这个时候就有必要调整以下 innodb_autoinc_lock_mode 值了!
+
+            具体的 innodb_autoinc_lock_mode 可以查看相关的资料, 共有3个值, 并且本人测试的是:
+
+            show variables like "innodb_autoinc_lock_mode";
+            ----------------------------------------------------
+            Variable_name	            Value
+            innodb_autoinc_lock_mode	2
+
+    覆盖索引
+        什么是覆盖索引?
+            如果一个 索引包含（或者说覆盖）所有需要查询的字段的值, 我们就称之为"覆盖索引";
+
+        目前能做 覆盖索引的 索引类型有哪些?
+            覆盖索引必须要存储索引列的值, 而哈希索引、空间索引、全文索引等 都不存储索引列的值, 所以 MySQL 只能使用B-Tree索引 做 覆盖索引!
+
+        当 explain 的 Extra 列 出现了 Using Index 就表示使用了 覆盖索引!
+
+    使用索引扫描来做排序: TODO 书中胡说八道, 只能用来作为参考!
+        创建表:
+            CREATE TABLE `rental` (
+              `rental_id` bigint NOT NULL AUTO_INCREMENT,
+              `rental_date` date NOT NULL,
+              `inventory_id` int NOT NULL,
+              `customer_id` int NOT NULL,
+              `staff_id` int NOT NULL,
+              PRIMARY KEY (`rental_id`),
+              UNIQUE KEY `rental_date` (`rental_date`,`inventory_id`,`customer_id`)
+            ) ENGINE=InnoDB AUTO_INCREMENT=11 DEFAULT CHARSET=utf8mb3;
+
+            --- rental_date  出租日期
+            --- inventory_id 库存ID, 
+            --- customer_id  租户Id
+            --- staff_id     员工编号
+
+        插入测试数据:
+            INSERT INTO rental VALUES (1, '2021-01-01', 1, 4, 100);
+            INSERT INTO rental VALUES (2, '2021-01-02', 3, 1, 100);
+            INSERT INTO rental VALUES (3, '2021-01-03', 2, 1, 100);
+            INSERT INTO rental VALUES (4, '2021-01-04', 1, 3, 100);
+            INSERT INTO rental VALUES (5, '2021-01-05', 1, 1, 100);
+            INSERT INTO rental VALUES (6, '2021-01-01', 5, 1, 100);
+            INSERT INTO rental VALUES (7, '2021-01-01', 2, 2, 200);
+            INSERT INTO rental VALUES (8, '2021-01-01', 3, 1, 300);
+            INSERT INTO rental VALUES (9, '2021-01-01', 5, 3, 400);
+            INSERT INTO rental VALUES (10, '2021-01-01', 4, 1, 500);
+
+        测试:
+            EXPLAIN SELECT rental_id, staff_id FROM rental WHERE rental_date = "2021-01-01" ORDER BY rental_date, inventory_id, customer_id;
+
+    压缩(前缀压缩) 索引
+        这个只是用来参考了解! MyISAM 引擎下 使用压缩索引 进行 order by asc 性能可以, 进行 order by desc 性能要慢很多倍!
+
+    重复索引 和 冗余索引
+        重复索引: 指在相同的列上 按照相同顺序, 相同类型的 索引, 应该尽量避免这种现象的出现, 作用一样没必要重复创建!
+        冗余索引: 指在相同的列上 创建不同顺序 或 不同索引类型的索引, 来满足不同查询的一种 索引创建策略!
+
+    索引和锁:
+        在 InnoDB 中可以使用索引, 减少使用不必要的行锁! 高并发下 应尽量避免 在索引列上 使用范围查询 而锁住多个行!
+        
+        关于 InnoDB 索引和锁有一些很少有人知道的细节: InnoDB 在 二级索引上 使用共享（读）锁, 访问 主键索引 需要排他（写）锁!
+        这消除了使用覆盖索引的可能性, SELECT FOR UPDATE 比 LOCK IN SHARE MODE 或非锁定查询要慢很多!
