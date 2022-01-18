@@ -634,27 +634,107 @@ TODO 我们该如何选择我们的存储引擎呢?
 -----------------------------------------------------------------------------------------------------------------------------------------
 --------------------------------------------------------------- 第6章 查询性能优化 --------------------------------------------------------
 -----------------------------------------------------------------------------------------------------------------------------------------
+前面的章节, 已经了解了 如何创建合理的表结构和索引, 但是还远远不够 即使表结构的索引设计的再优秀, 查询写的不够好, 性能也提不上去!
+
+本章核心点:
+    MySQL是如何执行查询的?
+    优化器是如何工作的?
+    深入理解执行计划是什么东西?
+
+慢查询的基础
+    查询慢的最根本原因: 就是数据量太多, 每次查询扫描的行数 或者 获取的行数、列数 太多 造成的!
+
+    1、确认应用程序是否在检索大量超过需要的数据。这通常意味着访问了太多的行, 但有时候也可能是访问了太多的列
+    2、确认 MySQL 服务器层是否在分析大量超过需要的数据行
 
 
+重构慢查询的方式
+    只有一个原则: 拆分复杂的SQL语句 或者 拆分大批量的任务 用 limit 来实现!
+
+查询执行的基础
+    查询执行路径
+
+    客户端 和 服务器端 通信协议:
+        通信方式: 半双工通信方式!
+
+        查询状态: 使用 SHOW FULL PROCESSLIST; 命令来查看就OK了, 具体每个枚举值 参考图片!
+
+    查询缓存
+        存储结构: 是通过 Hash结构存储的, 假设 Hash 函数为 function(sql) = key, 结构为 key, sql查询结果!
+        工作过程: 一旦客户端发起查询, 首先在 查询缓冲中去命中, 一旦命中则直接从查询缓存中返回给客户端, 否则继续执行;
+
+    查询优化处理
+        语法解析器 和 预处理 过程
+            语法解析器: 将SQL 语句解析成 语法树, 并初步校验 语法正确性!
+            预处理过程: 再次判定 语法 是否正确, 并进一步做 数据库, 表, 列是否都 存在, 以及 部分的权限校验(了解)
+
+        查询优化器
+            作用: 将上面产生的 SQL 语法树 生成最优的执行计划!
+            原理: 一条SQL语法树, 有很多条执行路径; 这些执行路径 都可以得到相同的查询结果! 优化器目的就是 从这些不同的执行路径里面 挑选最优的执行路径!
+
+            MySQL 使用基于成本的优化器! 成本的单位是 查询了多少个 4K数据页! 可以通过 show status like "last_query_cost";
+
+        常见的优化类型
+
+        关联查询的执行过程
+
+        执行计划
+            查看执行计划的指令: explain sql;
+            查看优化器重构的SQL语句: show warnings;
+
+        关联查询优化
+            select f.film_id, f.title, f.release_year, a.actor_id, a.first_name, a.last_name from film f
+            inner join film_actor as fa on f.film_id = fa.film_id
+            inner join actor as a on fa.actor_id = a.actor_id;
+            show status like "last_query_cost";     -- 查看这次查询的成本: 查询了多少个 4K数据页
+
+            explain
+            select f.film_id, f.title, f.release_year, a.actor_id, a.first_name, a.last_name from film f
+            inner join film_actor as fa on f.film_id = fa.film_id
+            inner join actor as a on fa.actor_id = a.actor_id;
+            show warnings;      -- 查看优化器重构的SQL语句
+
+            -- STRAIGHT_JOIN 关键字, 按照我们自己定的顺序执行
+            select f.film_id, f.title, f.release_year, a.actor_id, a.first_name, a.last_name from film f
+            straight_join film_actor as fa on f.film_id = fa.film_id
+            straight_join actor as a on fa.actor_id = a.actor_id;
+            show status like "last_query_cost";     -- 查看本次查询的成本: 查询了多少个 4K数据页
+
+            explain
+            select f.film_id, f.title, f.release_year, a.actor_id, a.first_name, a.last_name from film f
+            straight_join film_actor as fa on f.film_id = fa.film_id
+            straight_join actor as a on fa.actor_id = a.actor_id;
+            show warnings;      -- 查看优化器重构的SQL语句
+
+        排序查询优化
+            两种排序方式:
+                老版本的两次传输排序
+                    行指针 + 排序列 ---> 根据排序列排序 ---> 再次返回表中获取相关的 列字段
+                    优点: 可以容纳更多行的排序
+                    缺点: 有两次传输, I/O开销大
+                新版本的一次传输排序
+                    整行数据       ---> 根据排序列排序 ---> 直接返回要查询的字段
 
 
+                如果在关联查询的时候进行排序:
+                    如果排序字段在第一张中, 则第一张表先进行排序, 然后在关联 直到得到想要的数据
+                    如果排序字段不在第一张, 则先进行表的关联, 最后排序!
 
+                limit 的处理:
+                    limit 是在 order by 之后进行的, 纵然 limit 一个很小的值, 其整个执行过程要 排序的行 也可能非常多(数据量很大)!
 
+    查询执行引擎
+        MySQL在执行优化的阶段, 为每张表生成了一个Handler, 执行的过程就是按照执行计划 调用 Handler API 的过程!
+        不是所有的执行任务都由 Handler 来完成, 例如一些锁表的操作或者更细粒度的锁!
 
+    返回结果给客户端
+        MySQL 将结果集返回客户端是一个增量、逐步返回的过程。例如, 我们回头看看前面的关联操作, 一旦服务器处理完最后一个关联表,
+        开始生成第一条结果时, MySQL就可以开始向客户端逐步返回结果集了
 
+查询优化器的局限性:
+    这部分作为了解, 对于拿不准 sql 语句, 可以通过 explain sql 语句后, 再执行 show warnings; 来看下优化器重构的 sql 语句!
 
-
-
-
-
-
-
-
-
-
-
-
-
+查询优化器的提示 hint(暗示的意思)
 
 
 
