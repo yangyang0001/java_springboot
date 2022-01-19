@@ -735,11 +735,26 @@ TODO 我们该如何选择我们的存储引擎呢?
     这部分作为了解, 对于拿不准 sql 语句, 可以通过 explain sql 语句后, 再执行 show warnings; 来看下优化器重构的 sql 语句!
 
 查询优化器的提示 hint(暗示的意思)
+    能不用尽量不要用, 因为在优化器面前使用 影响生成的执行计划 意义不大, 这种小聪明放在别处吧!
 
+优化特定类型的查询
+    count() 聚合函数
 
+        -- 最原始的写法: 查询 city_id > 5 的城市个数
+        select count(*) from city where city_id > 5;
+        show status like "last_query_cost";
+        explain select count(*) from city where city_id > 5;
+        show warnings;
 
+        -- 这种优化不起作用, 虽然成本低了, 但并不知道这些 4K数据页 是否连续
+        select (select count(*) from city) - count(*) from city where city_id <=5;
+        show status like "last_query_cost";
+        explain select (select count(*) from city) - count(*) from city where city_id <=5;
+        show warnings;
 
+    优化关联查询
 
+    优化 group by 查询, 这种查询是在 分组列上进行自动排序!
 
 
 
