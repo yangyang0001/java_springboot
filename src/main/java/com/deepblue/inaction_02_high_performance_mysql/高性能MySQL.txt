@@ -572,14 +572,14 @@ TODO 我们该如何选择我们的存储引擎呢?
 
     使用索引扫描来做排序: TODO 书中胡说八道, 只能用来作为参考!
         创建表:
-            CREATE TABLE `rental` (
-              `rental_id` bigint NOT NULL AUTO_INCREMENT,
-              `rental_date` date NOT NULL,
-              `inventory_id` int NOT NULL,
-              `customer_id` int NOT NULL,
-              `staff_id` int NOT NULL,
-              PRIMARY KEY (`rental_id`),
-              UNIQUE KEY `rental_date` (`rental_date`,`inventory_id`,`customer_id`)
+            CREATE TABLE rental (
+              rental_id bigint NOT NULL AUTO_INCREMENT,
+              rental_date date NOT NULL,
+              inventory_id int NOT NULL,
+              customer_id int NOT NULL,
+              staff_id int NOT NULL,
+              PRIMARY KEY (rental_id),
+              UNIQUE KEY rental_date (rental_date,inventory_id,customer_id)
             ) ENGINE=InnoDB AUTO_INCREMENT=11 DEFAULT CHARSET=utf8mb3;
 
             --- rental_date  出租日期
@@ -755,6 +755,18 @@ TODO 我们该如何选择我们的存储引擎呢?
     优化关联查询
 
     优化 group by 查询, 这种查询是在 分组列上进行自动排序!
+
+
+
+总结:
+    对于软件员来说, 把控高性能MySQL 主要把控以下方面
+    1、慢查询基础
+    2、查询执行基础
+    3、高性能索引创建和使用策略
+    4、特定类型的优化
+    5、执行计划的使用
+
+
 
 
 
