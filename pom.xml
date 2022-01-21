@@ -34,13 +34,14 @@
             <version>1.2.40.Beetl.RELEASE</version>
         </dependency>
 
-        <!-- 使用了热部署配置文件, 一旦 class 文件发生改变, 重新编译后会自动重启, TODO 工作中禁用 -->
+        <!-- 使用了热部署配置文件, 一旦 class 文件发生改变, 重新编译后会自动重启, TODO 工作中禁用
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-devtools</artifactId>
             <scope>runtime</scope>
             <optional>true</optional>
         </dependency>
+        -->
 
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -72,18 +73,24 @@
             <version>3.12.0</version>
         </dependency>
 
-        <!-- 数据源配置 -->
+        <!-- 数据源配置
+            <dependency>
+                <groupId>com.zaxxer</groupId>
+                <artifactId>HikariCP</artifactId>
+                <version>3.4.5</version>
+            </dependency>
+        -->
         <dependency>
-            <groupId>mysql</groupId>
-            <artifactId>mysql-connector-java</artifactId>
-            <version>6.0.5</version>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-jdbc</artifactId>
         </dependency>
 
         <dependency>
-            <groupId>com.zaxxer</groupId>
-            <artifactId>HikariCP</artifactId>
-            <version>3.4.5</version>
+            <groupId>mysql</groupId>
+            <artifactId>mysql-connector-java</artifactId>
         </dependency>
+
+
 
 
 

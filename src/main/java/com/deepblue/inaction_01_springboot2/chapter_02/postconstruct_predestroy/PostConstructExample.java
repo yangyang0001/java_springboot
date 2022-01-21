@@ -1,8 +1,5 @@
 package com.deepblue.inaction_01_springboot2.chapter_02.postconstruct_predestroy;
 
-import com.deepblue.inaction_01_springboot2.chapter_02.datasource.DataSourceConfig;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 
 import javax.annotation.PostConstruct;

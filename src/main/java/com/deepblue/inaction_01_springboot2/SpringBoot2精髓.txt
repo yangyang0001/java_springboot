@@ -37,7 +37,7 @@ Aspect 的学习, 参考 Spring3.x实战.txt 中的东西!
         // * 匹配路径段内的零个或多个字符
         <li>{@code *} matches zero or more characters within a path segment</li>
 
-        // ** 匹配零个或多个<em>路径段</em>，直到路径结束
+        // ** 匹配零个或多个<em>路径段</em>, 直到路径结束
         <li>{@code **} matches zero or more <em>path segments</em> until the end of the path</li>
 
         <li><code>{spring}</code> matches a <em>path segment</em> and captures it as a variable named "spring"</li>
@@ -55,6 +55,62 @@ Aspect 的学习, 参考 Spring3.x实战.txt 中的东西!
 
 Spring JDBC Template
     只要配置了数据源 DataSourceConfig 就能直接使用 jdbcTemplate 了!
+
+
+---------------------------------------------------------------------------------------------------------------------------------------------
+------------------------------------------------------------ 第7章 SpringBoot 配置 -----------------------------------------------------------
+---------------------------------------------------------------------------------------------------------------------------------------------
+在SpringBoot 出现之前, 配置文件是 类似于 application-xxx.xml 的格式, 举例: application-datasource.xml, application-mvc.xml 等!
+SpringBoot 之后就只有一个 配置文件了 application.properties;
+
+SpringBoot 默认启动端口: 8080, 配置服务端口 server.port=9090
+
+server.tomcat.* 包含了 Tomcat 的相关配置, 较为重要的配置如下:
+
+＃打开 Tomcat 访问日志
+server.tomcat.access.log.enabled=false
+
+＃访问日志所在的目录
+server.tomcat.accesslog.directory=logs
+
+＃允许 HTTP 请求缓存到请求队列的最大个数, 默认不限制
+server.tomcat.accept-count=
+
+＃最大连接数, 默认不限制, 如果一旦连接数到达, 剩下的连接将会保存到请求缓存队列里, 也就是 accept-count 指定队列
+server.tomcat.max-connections=
+
+＃最大工作线程数
+server.tomcat.max-threads=
+
+#HTTP POST 内容最大长度, 默认不限制
+server.tomcat.max-http-post-size=
+
+
+@Value 可以将一个配置 装配到一个Bean中!
+
+SpringBoot 自动装配 @Configuration, @Bean
+
+
+---------------------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------- 第11章 MongoDB ---------------------------------------------------------------
+---------------------------------------------------------------------------------------------------------------------------------------------
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
