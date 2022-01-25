@@ -1,0 +1,49 @@
+参考官网安装教程:
+    下载地址
+        https://www.mongodb.com/try/download/community
+
+        本人使用 mongodb-linux-x86_64-rhel70-5.0.5.tgz
+
+    安装教程
+        https://docs.mongodb.com/guides/server/install/
+
+    配置环境变量
+        export PATH=/home/mongodb-linux-x86_64-rhel70-5.0.5/bin:$PATH
+
+    启动命令
+        mongod --dbpath=/home/mongodb-linux-x86_64-rhel70-5.0.5/data/db/
+        mongod --dbpath=/home/mongodb-linux-x86_64-rhel70-5.0.5/data/db/ --logpath=/home/mongodb-linux-x86_64-rhel70-5.0.5/logs/mongodb.log --logappend
+
+
+    配置启动命令:
+        首先创建日志文件
+            cd /home/mongodb-linux-x86_64-rhel70-5.0.5/
+            mkdir logs
+            cd logs
+            vim mongodb.log
+            保存即可!
+
+        配置启动命令
+            vim /etc/rc.local
+
+            ## 加入如下内容
+            mongod --dbpath=/home/mongodb-linux-x86_64-rhel70-5.0.5/data/db/ --logpath=/home/mongodb-linux-x86_64-rhel70-5.0.5/logs/mongodb.log --logappend
+            mongod --dbpath=/home/mongodb-linux-x86_64-rhel70-5.0.5/data/db/ --logpath=/home/mongodb-linux-x86_64-rhel70-5.0.5/logs/mongodb.log --logappend
+
+    专业DBA 启动时可能加上很多的参数, 这样会看起来非常的混乱, 这里采用配置文件的方式进行配置
+
+        配置文件过程
+            cd /home/mongodb-linux-x86_64-rhel70-5.0.5/
+            vim mongodb.cnf     这里参考 mongodb.cnf 文件
+            保存即可!
+
+        启动命令
+            cd /home/mongodb-linux-x86_64-rhel70-5.0.5/bin/
+            mongod -f mongodb.cnf
+
+            或者使用命令:
+
+            cd /home/mongodb-linux-x86_64-rhel70-5.0.5/bin/
+            mongod --config mongodb.cnf
+
+
