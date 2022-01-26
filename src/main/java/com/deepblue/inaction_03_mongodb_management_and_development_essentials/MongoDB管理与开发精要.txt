@@ -59,23 +59,102 @@ mongodb 默认的端口为: 27017
 ---------------------------------------------------------------------------------------------------------------------------------------------
 ---------------------------------------------------------------------- 第3章 高级查询 ---------------------------------------------------------
 ---------------------------------------------------------------------------------------------------------------------------------------------
+MongoDB 解决的不是高并发的读写问题, 而是解决的海量数据的读取操作!
+
+查询操作
+    1、比较操作符 < <= = >= > !=
+        $gt     表示 >
+        $lt     表示 <
+        $eq     表示 =
+        $gte    表示 >=
+        $lte    表示 <=
+        $ne     表示 !=
+
+        db.things.find({_id: {$eq : 1}});
+
+        多个比较条件使用的逗号分隔
+            举例: db.things.find({_id: {$gt : 0, $lt : 2}});
+
+    2、$all 匹配所有
+        db.things.find({_id : {$all : [0, 1]}});
+
+        对比MySQL 中 IN() :
+            MySQL 中的 IN()   : 表示满足集合中的任意一个就可以查询出来
+            Mongo 中的 $all() : 表示要满足集合中的所有元素才可以查询出来
+
+    3、$in 匹配集合中的任意一个
+        db.things.find({age : {$in : [1, 2, 10, null]}});
+
+    4、查询是否存在某个字段的记录 $exists
+        db.things.find({_id : {exists : true}});
+
+    5、null值处理 在 mongodb 5.0.5 中已经可以使用了!
+        db.things.find({age : null});
+
+    6、$mod 取模运算 age mod 9 = 1 的数据
+        db.things.find({age : {$mod : [9, 1]}});
+
+    7、$size 匹配数组中的元素个数
+        var j = {_id : 3, name: "wangwu", hobbies : ["football", "basketball", "volleyball"]};
+        db.things.save(j);
+
+        var j = {_id : 4, name: "zhaoliu", hobbies : ["xiangqi", "puke"]};
+        db.things.save(j);
+
+        db.things.find({hobbies: {$size: 2}});
+
+    8、统计count 个数
+        db.things.find().count();
+
+    9、skip 返回列表时, 跳过的条数
+        db.things.find().skip(2);
+        // 查询跳过2条 并限制 只返回一条数据
+        db.things.find().skip(2).limit(1);
+        // 限制后的数量 count() 中填写 true
+        db.things.find().skip(1).limit(5).count(true);
+
+    10、sort 排序
+        // 升序
+        db.things.find().sort({age: 1});
+        // 降序
+        db.things.find().sort({age: -1});
+
+    11、distinct("column_name") 这个操作在数据量非常大时, 非常耗时!
+        db.things.distinct("name");
+
+    12、group 分组统计 这里讲解的不清晰
+        db.things.aggregate([{$group : {_id : "$name", age : {$avg : "$age"}}}]);
+        db.things.aggregate([{$group : {_id : "$name", age : {$min : "$age"}}}])
 
 
+查询语法:
+    数组内容的查询:
+        db.things.find({hobbies: "football"});
+
+    内嵌文档查询:
+        当前记录中有一列 包含了不是一个字段的值, 这条记录就叫内嵌文档!
+        var j = {_id : 6, name: "zhangsan",  age: 22, hobbies : ["xiangqi", "puke"], author: {name : "yang", age : 30}};
+        db.things.save(j);
+        内嵌文档查询如下:
+        db.things.find({"author.name" : "yang"})
+
+    正则表达式匹配:
+        db.things.find({name : {$not : /^z.*/}});
 
 
+    $where 条件查询:
+        db.things.find({age : {$gt : 10}});
 
+联合查询:
+    MongoDB 不建议使用 关联查询, 除非没有办法
 
+游标和存储过程:
 
+    后两者使用 shell 语言太过麻烦, 转为 java 语言后再次使用一次!
 
-
-
-
-
-
-
-
-
-
+---------------------------------------------------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------- 第4章 高级更新 ---------------------------------------------------------
+---------------------------------------------------------------------------------------------------------------------------------------------
 
 
 
