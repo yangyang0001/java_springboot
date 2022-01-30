@@ -263,6 +263,223 @@ MapReduce 可以用以下更好用的 aggregate 代替:
 ---------------------------------------------------------------------------------------------------------------------------------------------
 --------------------------------------------------------------------- 第9章 索引及优化 --------------------------------------------------------
 ---------------------------------------------------------------------------------------------------------------------------------------------
+MongoDB 默认创建 _id_ 索引, 类似于 MySQL 中的主键索引!
+
+索引: 是对数据库中表的一列或者多列的值进行排序的一种数据结构!
+
+索引操作
+    索引基础
+        创建索引
+            db.things.ensureIndex({age : 1});
+
+        查询索引
+            db.things.getIndexes();
+            // 查询结果如下:
+            [
+                {
+                    "v" : 2,            // 版本
+                    "key" : {
+                        "_id" : 1       // 创建索引的列  1: 表示升序, -1: 表示降序
+                    },
+                    "name" : "_id_"     // 索引名称
+                },
+                {
+                    "v" : 2,
+                    "key" : {
+                        "age" : 1.0
+                    },
+                    "name" : "age_1",
+                    "background" : true // 是否是静默方式创建的索引 true: 是, false: 否!
+                }
+            ]
+
+        删除索引
+            删除表中的所有索引: db.things.dropIndexes();
+            删除表中特定的索引: db.things.dropIndex({age : 1}); 或者使用 db.things.dropIndex({age : 1}, {background : true});
+
+        重建表的索引
+            db.things.reIndex();
+
+    静默方式创建索引, 创建索引会导致阻塞, 直到创建索引完毕才能执行 当前表的读写操作!
+        db.things.ensureIndex(
+            {age : 1},
+            {background : true}
+        );
+
+    文档索引
+        db.factories.insert({new : "ww1", addr : {city : "Beijing", state : "BJ"}});
+        db.factories.insert({new : "ww2", addr : {city : "Shanghai", state : "SH"}});
+        db.factories.insert({new : "ww3", addr : {city : "Tianjin", state : "TJ"}});
+        db.factories.insert({new : "ww4", addr : {city : "Chongqing", state : "CQ"}});
+
+        创建方式
+            db.factories.ensureIndex({addr : 1});
+
+        使用场景: 只有查询的内容 和 列中内容一致, 才能用到索引, 否则用不到索引, 因为这里的索引用的是等值比价!
+
+        以下的使用方式才能使文档索引发挥作用:
+        db.factories.find({addr : {city : "Beijing", state : "BJ"}});
+
+
+    组合索引
+        创建方式
+            db.factories.ensureIndex({"addr.city" : 1, "addr.state" : 1}, {background : true});
+
+        使用场景: 只有最左匹配时才能使用到, 否则不起作用!
+
+        以下的都可以用到这种联合索引或者组合索引
+            db.factories.find({addr : {city : "Beijing", state : "BJ"}});
+            db.factories.find({addr : {city : "Beijing"}});
+            db.factories.find().sort({"addr.city" : 1, "addr.state" : 1});
+
+    唯一索引
+        db.unique_table.insert({firstname : "yang", lastname: "yang"});
+        db.unique_table.insert({firstname : "wang", lastname: "hong"});
+        db.unique_table.insert({firstname : "wang", lastname: "li"});
+
+        // 创建方式
+        db.unique_table.ensureIndex({firstname : 1, lastname : 1}, {unique : true});
+
+    强制使用索引
+
+
+    explain 查看执行计划
+        使用方式:
+        db.things.find({age : {$gt : 30}}).explain();
+
+        // 执行结果:
+        {
+            "explainVersion" : "1",
+            "queryPlanner" : {
+                "namespace" : "mydb.things",
+                "indexFilterSet" : false,
+                "parsedQuery" : {
+                    "age" : {
+                        "$gt" : 30.0
+                    }
+                },
+                "queryHash" : "4BB283C4",
+                "planCacheKey" : "7CE58451",
+                "maxIndexedOrSolutionsReached" : false,
+                "maxIndexedAndSolutionsReached" : false,
+                "maxScansToExplodeReached" : false,
+                "winningPlan" : {
+                    "stage" : "FETCH",
+                    "inputStage" : {
+                        "stage" : "IXSCAN",
+                        "keyPattern" : {
+                            "age" : 1.0
+                        },
+                        "indexName" : "age_1",
+                        "isMultiKey" : false,
+                        "multiKeyPaths" : {
+                            "age" : []
+                        },
+                        "isUnique" : false,
+                        "isSparse" : false,
+                        "isPartial" : false,
+                        "indexVersion" : 2,
+                        "direction" : "forward",
+                        "indexBounds" : {
+                            "age" : [
+                                "(30.0, inf.0]"
+                            ]
+                        }
+                    }
+                },
+                "rejectedPlans" : []
+            },
+            "command" : {
+                "find" : "things",
+                "filter" : {
+                    "age" : {
+                        "$gt" : 30.0
+                    }
+                },
+                "$db" : "mydb"
+            },
+            "serverInfo" : {
+                "host" : "localhost.localdomain",
+                "port" : 27017,
+                "version" : "5.0.5",
+                "gitVersion" : "d65fd89df3fc039b5c55933c0f71d647a54510ae"
+            },
+            "serverParameters" : {
+                "internalQueryFacetBufferSizeBytes" : 104857600,
+                "internalQueryFacetMaxOutputDocSizeBytes" : 104857600,
+                "internalLookupStageIntermediateDocumentMaxSizeBytes" : 104857600,
+                "internalDocumentSourceGroupMaxMemoryBytes" : 104857600,
+                "internalQueryMaxBlockingSortMemoryUsageBytes" : 104857600,
+                "internalQueryProhibitBlockingMergeOnMongoS" : 0,
+                "internalQueryMaxAddToSetBytes" : 104857600,
+                "internalDocumentSourceSetWindowFieldsMaxMemoryBytes" : 104857600
+            },
+            "ok" : 1.0
+        }
+
+        主要查看以下的 最佳的计划 winningPlan 字段:
+
+            explain.queryPlanner.winningPlan
+                查询优化器针对该query所返回的最优执行计划的详细内容。
+
+            explain.queryPlanner.winningPlan.stage
+                最优执行计划的stage, 这里返回是FETCH, 可以理解为通过返回的index位置去检索具体的文档（stage有数个模式）。
+
+            explain.queryPlanner.winningPlan.inputStage
+                explain.queryPlanner.winningPlan.stage 的 child stage, 此处是IXSCAN, 表示进行的是index scanning。
+
+            explain.queryPlanner.winningPlan.keyPattern
+                所扫描的index内容, 此处是w:1与n:1。
+
+            explain.queryPlanner.winningPlan.indexName
+                winning plan所选用的index。
+
+            explain.queryPlanner.winningPlan.isMultiKey
+                是否是Multikey, 此处返回是false, 如果索引建立在array上, 此处将是true。
+
+            explain.queryPlanner.winningPlan.direction
+                此query的查询顺序, 此处是forward, 如果用了.sort({w : -1})将显示backward。
+
+            explain.queryPlanner.winningPlan.indexBounds
+                winningplan所扫描的索引范围
+
+优化器 Profiler
+    查看 Profiler级别:
+
+        db.getProfilingLevel();
+        0: 不开启
+        1: 记录慢命令
+        2: 记录所有命令
+
+    开启Profiler 功能
+        // 开启记录慢命令 第一个参数为Profiler级别 1:为记录慢命令; 第二个参数为 毫秒数 200毫秒
+        db.setProfilingLevel(1, 200);
+        // 开启记录慢命令 第一个参数为Profiler级别 2:记录所有命令; 第二个参数为 毫秒数 100毫秒
+        db.setProfilingLevel(2, 100);
+
+    查看Profiler 日志
+        db.system.profile.find({millis : {$gt : 50}});
+        db.system.profile.find({millis : {$gt : 0}}).sort({ts : -1}).limit(1);
+
+常用的优化方案
+    创建索引
+        db.things.ensureIndex({age : 1}, {background : true});
+
+    限定返回的条数
+        db.things.find().sort({age : 1}).limit(10);
+
+    只查询用到的字段
+        db.things.find({}, {_id : 1, name : 1, age : 1}).sort().limit(10);
+
+    使用 hint 强制提示使用某个索引, 不能随便乱用, 因为查询的是 name = "zhangsan" 的条件, 索引是 age 列, 二者没有任何关系!
+
+        举例: 使用 things 表中的 age 索引
+            db.things.find({name : "zhangsan"}).hint({age : 1});
+
+    采用Profiler
+
+
+
 
 
 
