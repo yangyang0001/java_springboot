@@ -766,7 +766,107 @@ TODO 我们该如何选择我们的存储引擎呢?
     4、特定类型的优化
     5、执行计划的使用
 
+锁的调试:
+    锁的种类分为 服务器锁 和 存储引擎锁
 
+    查看锁的状态:
+        ./mysqladmin -uroot -p -i 2 processlist
+        ./mysqladmin debug 可以查看锁的相关日志
+
+        具体可以参考官方给出的: https://dev.mysql.com/doc/refman/8.0/en/mysqladmin.html
+
+
+    服务器层的锁:
+        表锁
+        全局读锁
+        命名锁
+        用户锁也叫字符锁
+
+
+    存储引擎锁:
+    					SET AUTOCOMMIT = 0;
+    					BEGIN
+    					SELECT FILM_ID FROM FILM LIMIT 1 FOR UPDATE;
+
+
+-- 服务器层锁的锁
+		-- 1、表锁 分为 读锁和写锁, 能够显示的定义使用 和 隐式的应用
+		-- 显式表锁实验:
+				-- 窗口1:
+					LOCK TABLES film READ;
+
+				-- 窗口2:
+					LOCK TABLES film WRITE;
+
+				-- 窗口3:
+					SHOW PROCESSLIST;
+
+				-- 执行顺序: 窗口1, 窗口2, 窗口3, 窗口3给出以下的结果:
+				-- Id		User						Host						db		    Command			Time		State(对应当前执行命令的状态)				Info(执行的是哪一条命令)
+				-- 5		event_scheduler	            localhost								Daemon			763			Waiting on empty queue
+				-- 8		root						localhost:54226	            sakila	    Sleep			10
+				-- 9		root						localhost:54352	            sakila	    Query			4			Waiting for table metadata lock			LOCK TABLES film WRITE
+				-- 10		root						localhost:54354	            sakila	    Query			0			init									SHOW PROCESSLIST
+
+
+		-- 隐式表锁实验:
+				-- 窗口1:
+					SELECT SLEEP(100) FROM film LIMIT 1;
+
+				-- 窗口2:
+					LOCK TABLES film WRITE;
+
+				-- 窗口3:
+					SHOW PROCESSLIST;
+
+		-- 查看哪个线程占用锁导致的阻塞: 只有在 debug 模式下才能使用
+					-- 最新版本可以解锁 UNLOCK TABLES;
+					-- debug 模式下才能使用: mysqladmin debug;
+
+
+		-- 2、全局读锁
+		-- 使用方式: FLUSH TABLES WITH READ LOCK 或者 设置 read_only = 1来获取 单个全局读锁; 全局锁 和 其他的任何表锁都冲突!
+				-- 窗口1:
+					FLUSH TABLES WITH READ LOCK;
+
+				-- 窗口2:
+					LOCK TABLES film WRITE;
+
+				-- 窗口3:
+					SHOW PROCESSLIST;
+
+
+		-- 3、命名锁, 几乎不怎么使用
+		-- 使用方式: RENAME TABLE ole_table_name to new_table_name 时 或者 删除表时 自动触发的一种表锁!
+
+		-- 4、用户锁(锁的是 字符串, 字符串是某中资源) 几乎不怎么使用, 这里锁的是字符串 Yang
+		-- 你可以使用 GET_LOCK() 及其相关函数在 服务器级别内 锁住或释放任意一个字符串!
+		-- 窗口1:
+					SELECT GET_LOCK("Yang", 100);
+
+		-- 窗口2:
+					SELECT GET_LOCK("Yang", 100);
+
+		-- 窗口3:
+					SHOW PROCESSLIST;
+
+		-- Id	User	Host						db			Command		Time	State				Info
+		-- 63	root	localhost:57192	            sakila	    Query		4		User lock			SELECT GET_LOCK("Yang", 100)
+
+-- 存储引擎中的锁 INNODB 为主
+
+		-- 窗口1:
+					SET AUTOCOMMIT = 0;
+					BEGIN;
+					SELECT FILM_ID FROM FILM LIMIT 1 FOR UPDATE;
+
+		-- 窗口2:
+                    SET AUTOCOMMIT = 0;
+					BEGIN;
+					SELECT FILM_ID FROM FILM LIMIT 1 FOR UPDATE;
+
+		-- 窗口3:
+                    SHOW FULL PROCESSLIST;
 
 
 
