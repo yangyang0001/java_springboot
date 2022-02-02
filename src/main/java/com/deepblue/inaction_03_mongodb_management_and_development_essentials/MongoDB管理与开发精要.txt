@@ -255,10 +255,49 @@ MapReduce 可以用以下更好用的 aggregate 代替:
 ---------------------------------------------------------------------------------------------------------------------------------------------
 ---------------------------------------------------------------------- 第8章 访问控制 ---------------------------------------------------------
 ---------------------------------------------------------------------------------------------------------------------------------------------
-创建 root 用户
-    db.createUser({user:"root",pwd:"Yang199001",roles:["dbAdmin"]})
-    db.auth("root", "Yang199001");
 
+
+// 创建一个 用户管理员用户
+use admin
+db.createUser({user : "root", pwd : "Yang199001", roles : [{role:"root", db : "admin"}]});
+
+// 创建单个数据库用户
+use mydb
+db.createUser({ user: "yangyang", pwd: "123456", roles: [{ role: "readWrite", db: "mydb"}]})
+
+user  : 用户名
+pwd   : 密码
+db    : 指定该用户的数据库, admin是用于权限控制的数据库, 如果没有需要新建一个
+roles : 指定用户的角色, 可以用一个空数组给新用户设定空角色；在roles字段,可以指定内置角色和用户定义的角色。role里的角色可以选 :
+
+Built-In Roles (内置角色) :
+    1、数据库用户角色 : read、readWrite;
+    2、数据库管理角色 : dbAdmin、dbOwner、userAdmin；
+    3、集群管理角色 : clusterAdmin、clusterManager、clusterMonitor、hostManager；
+    4、备份恢复角色 : backup、restore；
+    5、所有数据库角色 : readAnyDatabase、readWriteAnyDatabase、userAdminAnyDatabase、dbAdminAnyDatabase
+    6、超级用户角色 : root
+    // 这里还有几个角色间接或直接提供了系统超级用户的访问 (dbOwner 、userAdmin、userAdminAnyDatabase)
+    7、内部角色 : __system
+
+具体角色的功能
+    Read : 允许用户读取指定数据库
+    readWrite : 允许用户读写指定数据库
+    dbAdmin : 允许用户在指定数据库中执行管理函数, 如索引创建、删除, 查看统计或访问system.profile
+    userAdmin : 允许用户向system.users集合写入, 可以找指定数据库里创建、删除和管理用户
+    clusterAdmin : 只在admin数据库中可用, 赋予用户所有分片和复制集相关函数的管理权限
+    readAnyDatabase : 只在admin数据库中可用, 赋予用户所有数据库的读权限
+    readWriteAnyDatabase : 只在admin数据库中可用, 赋予用户所有数据库的读写权限
+    userAdminAnyDatabase : 只在admin数据库中可用, 赋予用户所有数据库的userAdmin权限
+    dbAdminAnyDatabase : 只在admin数据库中可用, 赋予用户所有数据库的dbAdmin权限
+    root : 只在admin数据库中可用, 超级账号, 超级权限
+
+
+查看所有用户列表:
+    use admin
+
+验证用户权限
+    db.auth("root", "Yang199001");
 
 ---------------------------------------------------------------------------------------------------------------------------------------------
 --------------------------------------------------------------------- 第9章 索引及优化 --------------------------------------------------------
@@ -452,10 +491,17 @@ MongoDB 默认创建 _id_ 索引, 类似于 MySQL 中的主键索引!
         2: 记录所有命令
 
     开启Profiler 功能
-        // 开启记录慢命令 第一个参数为Profiler级别 1:为记录慢命令; 第二个参数为 毫秒数 200毫秒
-        db.setProfilingLevel(1, 200);
-        // 开启记录慢命令 第一个参数为Profiler级别 2:记录所有命令; 第二个参数为 毫秒数 100毫秒
-        db.setProfilingLevel(2, 100);
+        启动时开启:
+            配置文件中使用
+                在mongodb.cnf 中配置 profile=1
+            启动服务器时使用
+                mongod -f mongodb.cnf
+
+        命令式开启:
+            // 开启记录慢命令 第一个参数为Profiler级别 1:为记录慢命令; 第二个参数为 毫秒数 200毫秒
+            db.setProfilingLevel(1, 200);
+            // 开启记录慢命令 第一个参数为Profiler级别 2:记录所有命令; 第二个参数为 毫秒数 100毫秒
+            db.setProfilingLevel(2, 100);
 
     查看Profiler 日志
         db.system.profile.find({millis : {$gt : 50}});
