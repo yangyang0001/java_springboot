@@ -1,0 +1,285 @@
+db.things.find();
+
+db.things.find({_id : 1});
+
+db.things.find({_id : {$gt : 0, $lt : 2}});
+
+db.things.find({_id : {$all : [1]}});
+
+db.things.find({_id : {$exists : true}});
+
+var i = {_id : 2, name : "lisi", age : null};
+db.things.save(i);
+
+
+var j = {_id : 3, name: "wangwu", hobbies : ["xiangqi", "puke"]};
+db.things.save(j);
+
+db.things.find({hobbies: {$size: 2}});
+
+db.things.find().count();
+
+
+db.things.find().skip(2).limit(1);
+db.things.find().skip(1).limit(1).count(true);
+db.things.find().skip(1).limit(5).count(true);
+
+db.things.find().sort({age: 1});
+
+db.things.find().sort({age: -1});
+
+db.things.distinct("age");
+
+        
+
+db.things.find({hobbies: ["football", "xiangqi"]});
+
+
+db.things.aggregate([{$group : {_id : "$name", age : {$avg : "$age"}}}])
+db.things.aggregate([{$group : {_id : "$name", age : {$min : "$age"}}}])
+
+db.things.find();
+
+var j = {_id : 6, name: "zhangsan",  age: 22, hobbies : ["xiangqi", "puke"], author: {name : "yang", age : 30}};
+db.things.save(j);
+
+db.things.find({"author.name" : "yang"})
+
+
+
+db.things.find({name : {$not : /^z.*/}});
+
+db.things.find({age : {$gt : 10}});
+
+var i = {count : 2, test2 : "t1"}
+var j = {count : 3, test2 : "t2"};
+
+db.t1.insert(i);
+db.t1.insert(j);
+
+db.t1.find();
+
+db.t1.find({_id : ObjectId("61f2a77101759279b2b9c5fb")});
+
+
+db.things.update({_id : {$in : [1, 2 ,3]}}, {$inc : {age : 10}});
+db.things.find();
+
+db.things.update({_id : 2}, {$set : {age : 11}});
+
+
+db.things.update({_id : 2}, {$unset : {age : 1}});
+
+
+db.things.update({_id : 4}, {$push : {hobbies : "music"}});
+db.things.update({_id : 4}, {$pushAll : {hobbies : ["aaa", "bbb"]}});
+
+db.things.update({_id : 4}, {$set : {hobbies : ["aaa", "bbb"]}});
+
+
+db.things.update({_id : 4}, {$addToSet : {hobbies : "a"}});
+
+
+db.things.update({_id : 4}, {$pop : {hobbies : -1}});
+db.things.update({_id : 4}, {$pop : {hobbies : 1}});
+db.things.find();
+
+db.things.update({_id : 4}, {$pull : {hobbies : "music"}});
+
+db.things.update({_id : 4}, {$pullAll : {hobbies : ["aaa", "music"]}});
+
+db.things.update({_id : 4}, {$rename : {new_age : "age"}});
+
+db.thigs.isCapped();
+
+db.createCollection("mine_capped_collection", {capped : true, size: 100000000});
+db.mine_capped_collection.isCapped();
+db.mine_capped_collection.validate();
+
+
+db.students.insert({classid : 1, age : 14, name : "Tom"});
+db.students.insert({classid : 1, age : 12, name : "Jacky"});
+
+db.students.insert({classid : 2, age : 16, name : "Lily"});
+db.students.insert({classid : 2, age : 9, name : "Tony"});
+db.students.insert({classid : 2, age : 19, name : "Harry"});
+db.students.insert({classid : 2, age : 13, name : "Vincent"});
+
+db.students.insert({classid : 1, age : 14, name : "Bill"});
+db.students.insert({classid : 2, age : 17, name : "Bruce"});
+
+db.students.find();
+
+db.students.mapReduce(
+    function() { emit(this.classid, this.age);},
+    function(key,values) {
+        return Array.avg(values)
+    },
+    {
+       out : "avg_age"
+    }
+);
+    
+db.avg_age.find();
+    
+db.students.mapReduce(  
+    function() { emit(this.classid, this.age); }, 
+    function(key, values) {return Array.sum(values)}, 
+      {  
+         out: "sum_age",
+         sort: {classid : -1}
+      }
+);
+
+db.sum_age.find();
+
+// 根据 classid 和 name 进行分组, 统计当前分组的 平均age
+db.students.aggregate([{$group : {_id : ["$classid", "$name"], age : {$avg : "$age"}}}]);
+
+// 根据 classid 分组, 统计当前分组的 平均age
+db.students.aggregate([{$group : {_id : "$classid", age : {$avg : "$age"}}}]);
+
+// 根据 classid 分组, 统计当前分组的 age和
+db.students.aggregate([{$group : {_id : "$classid", age : {$sum : "$age"}}}]);
+
+
+db.createUser("root", "Yang199001");
+
+
+
+db.createUser({user:"root",pwd:"Yang199001",roles:["dbAdmin"]})
+
+
+db.auth("root", "Yang199001");
+
+
+db.things.getIndexes();
+
+db.things.ensureIndex({age : 1});
+
+db.things.dropIndexes();
+
+db.things.dropIndexes();
+db.things.dropIndex({age : 1}, {background : true});
+
+db.things.ensureIndex(
+    {age : 1},
+    {background : true}
+);
+
+db.things.reIndex();
+    
+    
+db.factories.insert({new : "ww1", addr : {city : "Beijing", state : "BJ"}});
+db.factories.insert({new : "ww2", addr : {city : "Shanghai", state : "SH"}});
+db.factories.insert({new : "ww3", addr : {city : "Tianjin", state : "TJ"}});
+db.factories.insert({new : "ww4", addr : {city : "Chongqing", state: "CQ"}});
+
+db.factories.find();
+
+// 创建文档索引
+db.factories.ensureIndex({addr : 1});
+
+db.factories.getIndexes();
+
+db.facotries.find({addr : ""});
+
+
+
+db.factories.find({addr : {city : "Beijing", state : "BJ"}}).explain();
+
+db.factories.find({addr : {city : "Beijing", state : "B"}}).explain();
+
+
+db.factories.ensureIndex({"addr.city" : 1, "addr.state" : 1}, {background : true});
+
+db.factories.find().sort({"addr.city" : 1, "addr.state" : 1});
+
+
+db.factories.find({addr : {city : "Beijing", state : "BJ"}});
+db.factories.find({addr : {city : "Beijing"}});
+db.factories.find().sort({"addr.city" : 1, "addr.state" : 1});
+
+
+
+db.unique_table.insert({firstname : "yang", lastname: "yang"});
+db.unique_table.insert({firstname : "wang", lastname: "hong"});
+db.unique_table.insert({firstname : "wang", lastname: "li"});
+
+// 创建方式
+db.unique_table.ensureIndex({firstname : 1, lastname : 1}, {unique : true});
+
+db.unique_table.getIndexes()
+
+
+
+db.things.getIndexes();
+db.things.find({age : {$gt : 30}});
+db.things.find({age : {$gt : 30}}).explain();
+
+db.things.find();
+db.things.find({name : "zhansan"});
+db.things.find({name : "zhansan"}).explain();
+
+
+db.things.getIndexes();
+db.things.find({age : 22});
+db.things.find({age : 22}).explain();
+
+
+
+db.getProfilingLevel();
+
+
+db.setProfilingLevel(2);
+
+
+db.system.profile.find();
+db.system.profile.find({millis : {$gt : 0}});
+
+
+db.system.profile.find({}, {ts: -1}).sort({ts : -1}).limit(1);
+
+db.system.profile.find({millis : {$gt : 0}}).sort({ts : -1}).limit(1000);
+
+
+db.things.find().sort({age : 1}).limit(10);
+
+
+db.things.find({}, {_id : 1, name : 1, age : 1}).sort({age : -1}).limit(10);
+
+db.things.find({name : "zhangsan"});
+db.things.find({name : "zhangsan"}).hint({age : 1});
+
+
+db.things.find({name : "zhangsan"}).explain();
+db.things.find({name : "zhangsan"}).hint({age : 1}).explain();
+
+
+use admin
+db.system.users.find();
+
+
+
+use admin
+db.createUser({user : "root", pwd : "Yang199001", roles : [{role:"root", db : "admin"}]});
+
+use mydb
+db.createUser({ user: "yangyang", pwd: "123456", roles: [{ role: "readWrite", db: "mydb"}]})
+
+db.auth("yangyang", "123456");
+
+db.book.find();
+
+var i = {"_id" : 3, "name" : "Java并发编程从入门到精通", "author" : "张振华", "_class" : "com.deepblue.inaction_01_springboot2.chapter_11.entity.Book"};
+var j = {"_id" : 4, "name" : "Java并发编程之美", "author" : "Doug Lea", "_class" : "com.deepblue.inaction_01_springboot2.chapter_11.entity.Book"};
+var m= {"_id" : 5, "name" : "Java并发编程的艺术", "author" : "方腾飞", "_class" : "com.deepblue.inaction_01_springboot2.chapter_11.entity.Book"};
+var n = {"_id" : 6, "name" : "Java并发编程实践", "author" : "Doug Lea", "_class" : "com.deepblue.inaction_01_springboot2.chapter_11.entity.Book"};
+db.book.insert(i);
+db.book.insert(j);
+db.book.insert(m);
+db.book.insert(n);
+
+db.book.find({_id : {$gte : 2, $lte: 6}}).skip(1).limit(10);
+
+
