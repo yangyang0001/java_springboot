@@ -46,45 +46,340 @@ Redis的5种基本数据结构
             127.0.0.1:6379> ttl books
             (integer) -1
 
+分布式锁实现:
+    set key value ex seconds nx 命令 使 setnx 和 expire 两个命令达到 串行化的原子性操作!
+    举例:
+        127.0.0.1:6379> set book:lock true ex 10 nx
+        OK
+        127.0.0.1:6379> get book:lock
+        "true"
+
+    现实中自己定义非常少, 可以参考 RedissonConfig 或者 springboot2_bloom 工程中的 ProductController
+
+    这块的伪代码非常重要, 非重入锁伪代码如下:
+        String key = "redis_lock";
+        String value = UUID.randomUUID().toString();
+
+        // 加锁成功
+        if(set(key, value, nx = true, ex = 5)) {
+            // 加锁处理业务逻辑
+            ...
+            ...
+            ...
+            // 使用完成后释放锁
+            if(delifequals(key, value)) {
+                // 删除锁成功
+            } else {
+                // 删除锁失败
+            }
+        } else {
+            // 加锁失败!
+        }
 
 
+消息队列
+    redis 中的 list 容器可以实现中的延时队列!
+    blpop 或者 brpop 来使用: 当 pop 元素为 null 时, 消费者 blocking! 这样可以避免空循环!
+    举例:
+        127.0.0.1:6379> lpush notify_queue apple banana pear orange
+        (integer) 4
+
+        127.0.0.1:6379> lrange notify_queue 0 -1
+        1) "orange"
+        2) "pear"
+        3) "banana"
+        4) "apple"
+
+        127.0.0.1:6379> brpop notify_queue 1
+        1) "notify_queue"
+        2) "apple"
+
+        127.0.0.1:6379> brpop notify_queue 1
+        1) "notify_queue"
+        2) "banana"
+
+        127.0.0.1:6379> brpop notify_queue 1
+        1) "notify_queue"
+        2) "pear"
+
+        127.0.0.1:6379> brpop notify_queue 1
+        1) "notify_queue"
+        2) "orange"
+
+        127.0.0.1:6379> brpop notify_queue 1
+        (nil)
+        (1.20s)
+
+        127.0.0.1:6379> brpop notify_queue 1
+        (nil)
+        (1.27s)
+
+位图: redis 支持这种 bit 位的数组, 就是将 byte 看成了 位数组了! (其实没有什么卵用)
+    getbit / setbit
+
+HyperLogLog
+    举例:
+        统计 PV :
+            127.0.0.1:6379> set www.google.com 0
+            OK
+            127.0.0.1:6379> get www.google.com
+            "0"
+            127.0.0.1:6379> incr www.google.com
+            (integer) 1
+            127.0.0.1:6379> get www.google.com
+            "1"
+            127.0.0.1:6379> incr www.google.com
+            (integer) 2
+            127.0.0.1:6379> incr www.google.com
+            (integer) 3
+            127.0.0.1:6379> incr www.google.com
+            (integer) 4
+            127.0.0.1:6379> incr www.google.com
+            (integer) 5
+            127.0.0.1:6379> get www.google.com
+            "5"
+
+        统计 UV :
+            pfadd
+            pfcount
+
+            举例:
+            127.0.0.1:6379> pfadd www.deep.com zhangsan zhangsan
+            (integer) 1
+            127.0.0.1:6379> pfadd www.deep.com zhangsan lisi
+            (integer) 1
+            127.0.0.1:6379> pfcount www.deep.com
+            (integer) 2
 
 
+        pfmerge 的使用:
+            使用格式:
+                pfmerge destkey sourcekey [sourcekey ...]
+
+            举例:
+                127.0.0.1:6379> pfadd www.google.com zhangsan lisi wangwu
+                (integer) 1
+                127.0.0.1:6379> pfadd www.baidu.com zhangsan lisi wangwu zhaoliu
+                (integer) 1
+                127.0.0.1:6379> pfmerge www.google.com www.baidu.com
+                OK
+                127.0.0.1:6379> pfcount www.google.com
+                (integer) 4
 
 
+布隆过滤器
+    特性: 说某个值存在时, 这个值未必存在; 说某个值不存在时, 这个值一定不存在!
+    范围: Redis 4.0 以后才有这个功能!
+    命令:
+        bf.add key value
+        bf.exists key value
+
+        bf.madd key value1 value2 ... valueN
+        bf.mexisits key value1 value2 .. valueN
+
+    举例:
+        127.0.0.1:6379> bf.add codehole user1
+        (integer) 1
+
+        127.0.0.1:6379> bf.add codehole user2
+        (integer) 1
+
+        127.0.0.1:6379> bf.add codehole user3
+        (integer) 1
+
+        127.0.0.1:6379> bf.exists codehole user1
+        (integer) 1
+
+        127.0.0.1:6379> bf.madd codehole user1 user3 user5 user7
+        1) (integer) 0
+        2) (integer) 0
+        3) (integer) 1
+        4) (integer) 1
+
+        127.0.0.1:6379> bf.mexists codehole user1 user3 user5 user7
+        1) (integer) 1
+        2) (integer) 1
+        3) (integer) 1
+        4) (integer) 1
+
+滑动窗口限制修改次数:
+    参考 滑动窗口: 设置 1天 之内修改 nickname 最多只能 5次 zset 的使用, 代码: RedisController.java 中 setNickNameWithZSet(String nickname);
+
+漏斗限流:
+    redis-cell 的使用: 它和 redisbloom 一样都是组件,都需要下载安装; 安装教程 参考: Redis安装.txt
+    使用方式: 参考 06_Redis-Cell使用方法.png
+
+    举例:
+        127.0.0.1:6379> CL.THROTTLE user123 15 1 60
+        1) (integer) 0
+        2) (integer) 16
+        3) (integer) 15
+        4) (integer) -1
+        5) (integer) 60
+
+    代码: RedisController.java 中 setNickNameWithFunnel(String nickname);
+
+GeoHash: 是 zset 的一种使用方式!
+    Redis3.2版本后 添加的地理位置Geo 模块!
+    现实中的使用: 附近的 Mobike, 附近的 餐馆
+
+    经度: [-180 到 180], 经度正负以本初子午线（英国格林尼治天文台）为界, 东正西负
+    经度: [-90  到  90], 北正南负
+
+    指令:
+    1、geoadd key longitude latitude member [longitude latitude member ...]  // 添加 member 的经纬度!
+        举例:
+            127.0.0.1:6379> geoadd company 111.0 33.0 yang
+            (integer) 1
+            127.0.0.1:6379> geoadd company 111.0 33.1 wang
+            (integer) 1
+            127.0.0.1:6379> geoadd company 111.2 33.2 lang
+            (integer) 1
+            127.0.0.1:6379> geoadd company 111.2 33.4 kang
+            (integer) 1
+
+    2、geodist key member1 member2 [unit]                                    // 计算 member1, member2 之间的距离!
+        解释:
+            unit 是距离单位, 距离单位可以是 m、 km、 mi 和 ft, 分别代表米、干米、英里和尺。
+
+        举例:
+            geodist company lang wang km        // lang 和 wang 之间的距离为 21.6932
+            "21.6932"
+
+    3、geopos key member [member ...]                                        // 获取 member 经纬度
+        举例:
+            geopos company lang
 
 
+    4、获取元素的 hash 值
+        geohash key member [member ...]
+        举例:
+            127.0.0.1:6379> GEOHASH company yang
+            1) "wmygtz7wzm0"
+            127.0.0.1:6379> GEOHASH company lang
+            1) "wmzhf7vk5b0"
+            127.0.0.1:6379> geohash company wang
+
+        可以去网站验证值: http://geohash.org/wmygtz7wzm0 可得到 相关的经纬度!
+
+    5、查找附近的公司
+        格式:
+            // 根据 key member 来查看附近的
+            georadiusbymember key member radius m|km|ft|mi [WITHCOORD] [WITHDIST] [WITHHASH] [COUNT count] [ASC|DESC] [STORE key] [STOREDIST key]
+            // 根据 key 和 经纬度 来查找附近的
+            georadius key longitude latitude radius m|km|ft|mi [WITHCOORD] [WITHDIST] [WITHHASH] [COUNT count] [ASC|DESC] [STORE key] [STOREDIST key]
+
+        可选参数:
+            [WITHCOORD] : 获取经纬度
+            [WITHDIST]  : 显示距离
+            [WITHHASH]  : 显示内部存储的hash值, 非 geohash 获取的那个, 不是一个东西!
+
+        举例:
+            // 范围 200 km 以内最多 3个元素, 按距离升序排列, 结果不会排除自身!
+            georadiusbymember company yang 200 km WITHCOORD WITHDIST WITHHASH count 3 asc
+
+            // 范围 200 km 以内最多 3个元素, 按距离降序排列, 结果不会排除自身!
+            georadiusbymember company yang 200 km count 3 desc
+
+            127.0.0.1:6379> georadiusbymember company yang 200 km count 3 desc
+            1) "kang"
+            2) "lang"
+            3) "wang"
+
+            127.0.0.1:6379> georadiusbymember company yang 200 km count 3 asc
+            1) "yang"
+            2) "wang"
+            3) "lang"
+
+            // 加上三个参数看一下返回格式!
+            127.0.0.1:6379> georadiusbymember company yang 200 km WITHCOORD WITHDIST WITHHASH count 3 asc
+            1) 1) "yang"
+               2) "0.0000"                      // 距离
+               3) (integer) 4040287794663135    // 存储的hash值
+               4) 1) "110.99999874830245972"    // 经纬度
+                  2) "32.99999989476653894"
+            2) 1) "wang"
+               2) "11.1226"
+               3) (integer) 4040291213286095
+               4) 1) "110.99999874830245972"
+                  2) "33.0999997139447828"
+            3) 1) "lang"
+               2) "29.0194"
+               3) (integer) 4040385021228733
+               4) 1) "111.2000003457069397"
+                  2) "33.19999953312302665"
+
+    注意: 在 特别发达的城市中定位人群时, 数据量会特别大,不建议在集群中存放, 最好用单一的服务存放; redis建议 一个 key  对应的数据量尽量不要超过 1M!
+
+scan
+    产生的背景:
+        1、因为 redis 是单线程的, 因此在使用 keys * 的时候, 如果key 有上百万个, 上千万个 这会阻塞其他线程的执行!
+        2、keys 没有 limit 之类的操作!
+
+    格式:
+        scan cursor [MATCH pattern] [COUNT count]
+
+    举例:
+        127.0.0.1:6379> set key0 111
+        OK
+        127.0.0.1:6379> set key1 111
+        OK
+        127.0.0.1:6379> set key2 222
+        OK
+        127.0.0.1:6379> set key3 333
+        OK
+        127.0.0.1:6379> set key4 444
+        OK
+        127.0.0.1:6379> set key5 555
+        OK
 
 
+        127.0.0.1:6379> scan 0 match key* count 3
+        1) "20"
+        2) (empty list or set)
+
+        127.0.0.1:6379> scan 20 match key* count 3
+        1) "1"
+        2) 1) "key4"
+
+        127.0.0.1:6379> scan 1 match key* count 3
+        1) "13"
+        2) 1) "key1"
+
+        127.0.0.1:6379> scan 13 match key* count 3
+        1) "11"
+        2) 1) "key0"
+           2) "key2"
+
+        127.0.0.1:6379> scan 11 match key* count 3
+        1) "31"
+        2) 1) "key3"
+           2) "key5"
+
+        127.0.0.1:6379> scan 31 match key* count 3
+        1) "0"
+        2) (empty list or set)
 
 
+大key的扫描
+    特别注意: 在 Redis 的使用中, 禁止使用太大太长的 key;
+
+    如何扫描最大的key?
+    [root@localhost bin]# ./redis-cli -h 127.0.0.1 -p 6379 -a root --bigkeys -i 0.1
+    Warning: Using a password with '-a' or '-u' option on the command line interface may not be safe.
+
+    # 扫描整个键空间以找到最大的键以及每种键类型的平均大小。
+    # Scanning the entire keyspace to find biggest keys as well as average sizes per key type.
+
+    # 你可以使用 -i 0.1 每 100 个 SCAN 命令休眠 0.1 秒（通常不需要）。
+    # You can use -i 0.1 to sleep 0.1 sec per 100 SCAN commands (not usually needed).
+
+    Unknown type 'MBbloom--' for key 'codehole'
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+---------------------------------------------------------------------------------------------------------------------------------------------
+----------------------------------------------------------------------- 第2篇 原理篇 ---------------------------------------------------------
+---------------------------------------------------------------------------------------------------------------------------------------------
 
 
 
