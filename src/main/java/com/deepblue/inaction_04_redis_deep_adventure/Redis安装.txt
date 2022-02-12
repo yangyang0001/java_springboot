@@ -122,6 +122,8 @@ yum install libtermcap-devel ncurses-devel libevent-devel readline-devel
 
 
 -------------------------------------------------------------------- 集群安装 --------------------------------------------------------
+主从模式:
+
 codis安装过程:
 
 /home/tar_package/codis/bin/codis-server /home/tar_package/codis/conf/redis_conf/redis-6379.conf
@@ -131,3 +133,5 @@ codis安装过程:
 /home/tar_package/codis/bin/redis-cli -h 192.168.120.150 -p 6379 -a root
 /home/tar_package/codis/bin/redis-cli -h 192.168.120.150 -p 6380 -a root
 /home/tar_package/codis/bin/redis-cli -h 192.168.120.150 -p 6381 -a root
+
+cluster 集群安装:

@@ -15,40 +15,56 @@ public class RedissonConfig {
 
     @Bean
     public RedissonClient redissonClient(){
-        Config config = new Config();
-        config.useSingleServer().setAddress("redis://192.168.188.7:6379").setPassword("root");
-        config.useSingleServer().setIdleConnectionTimeout(10000);
-        config.useSingleServer().setPingTimeout(2000);
-        config.useSingleServer().setConnectTimeout(10000);
-        config.useSingleServer().setTimeout(3000);
-        config.useSingleServer().setRetryAttempts(3);
-        config.useSingleServer().setRetryInterval(1500);
-        config.useSingleServer().setReconnectionTimeout(3000);  // failedSlaveReconnectionInterval
-        config.useSingleServer().setFailedAttempts(3);          // failedSlaveCheckInterval
-        config.useSingleServer().setSubscriptionsPerConnection(5);
-        config.useSingleServer().setSubscriptionConnectionMinimumIdleSize(1);
-        config.useSingleServer().setSubscriptionConnectionPoolSize(50);
-        config.useSingleServer().setConnectionMinimumIdleSize(32);
-        config.useSingleServer().setConnectionPoolSize(500);
-        RedissonClient client = Redisson.create(config);
-        return client;
 
-//        config.useClusterServers().addNodeAddress("redis://192.168.188.7:6379").setPassword("root");
-//        config.useClusterServers().setIdleConnectionTimeout(10000);
-//        config.useClusterServers().setPingTimeout(2000);
-//        config.useClusterServers().setConnectTimeout(10000);
-//        config.useClusterServers().setTimeout(3000);
-//        config.useClusterServers().setRetryAttempts(3);
-//        config.useClusterServers().setRetryInterval(1500);
-//        config.useClusterServers().setReconnectionTimeout(3000);
-//        config.useClusterServers().setFailedAttempts(3);
-//        config.useClusterServers().setSubscriptionsPerConnection(5);
-//        config.useClusterServers().setSubscriptionConnectionMinimumIdleSize(1);
-//        config.useClusterServers().setSubscriptionConnectionPoolSize(50);
-//        config.useClusterServers().setMasterConnectionMinimumIdleSize(32);
-//        config.useClusterServers().setMasterConnectionPoolSize(500);
+        // 单机版 RedissionConfig
+//        Config config = new Config();
+//        config.useSingleServer().setAddress("redis://192.168.188.7:6379")
+//                .setPassword("root");
+//        config.useSingleServer().setIdleConnectionTimeout(10000);
+//        config.useSingleServer().setConnectTimeout(10000);
+//        config.useSingleServer().setTimeout(3000);
+//        config.useSingleServer().setRetryAttempts(3);
+//        config.useSingleServer().setRetryInterval(1500);
+//        config.useSingleServer().setSubscriptionsPerConnection(5);
+//        config.useSingleServer().setSubscriptionConnectionMinimumIdleSize(1);
+//        config.useSingleServer().setSubscriptionConnectionPoolSize(50);
+//        config.useSingleServer().setConnectionMinimumIdleSize(32);
+//        config.useSingleServer().setConnectionPoolSize(500);
 //        RedissonClient client = Redisson.create(config);
 //        return client;
+
+        // 主从集群+哨兵机制, 这个非常重要, 是分布式和集群实现的基石!
+//        Config config = new Config();
+//        config.useSentinelServers().setMasterName("mymaster").addSentinelAddress(
+//                "redis://192.168.188.8:26379",
+//                "redis://192.168.188.8:26479",
+//                "redis://192.168.188.8:26579")
+//                .setPassword("root");
+//        RedissonClient client = Redisson.create(config);
+//        return client;
+
+        // TODO 源码中提供的例子是错的, 按照下面的方式配置!
+        Config config = new Config();
+        config.useClusterServers().addNodeAddress(
+                "redis://192.168.188.9:6179",
+                "redis://192.168.188.9:6279",
+                "redis://192.168.188.9:6379",
+                "redis://192.168.188.9:6479",
+                "redis://192.168.188.9:6579",
+                "redis://192.168.188.9:6679")
+                .setPassword("root");
+        config.useClusterServers().setIdleConnectionTimeout(10000);
+        config.useClusterServers().setConnectTimeout(10000);
+        config.useClusterServers().setTimeout(3000);
+        config.useClusterServers().setRetryAttempts(3);
+        config.useClusterServers().setRetryInterval(1500);
+        config.useClusterServers().setSubscriptionsPerConnection(5);
+        config.useClusterServers().setSubscriptionConnectionMinimumIdleSize(1);
+        config.useClusterServers().setSubscriptionConnectionPoolSize(50);
+        config.useClusterServers().setMasterConnectionMinimumIdleSize(32);
+        config.useClusterServers().setMasterConnectionPoolSize(500);
+        RedissonClient client = Redisson.create(config);
+        return client;
     }
 
     @Bean

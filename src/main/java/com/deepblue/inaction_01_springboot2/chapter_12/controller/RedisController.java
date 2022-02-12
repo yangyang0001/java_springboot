@@ -8,9 +8,10 @@ import org.redisson.api.RBloomFilter;
 import org.redisson.api.RLock;
 import org.redisson.api.RedissonClient;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DataAccessException;
 import org.springframework.data.geo.Point;
-import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.connection.RedisConnection;
+import org.springframework.data.redis.core.*;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -31,19 +32,18 @@ public class RedisController {
     public static String KEY = "lock_key";
 
     @Autowired
-    private StringRedisTemplate stringRedisTemplate;
-
-    @Autowired
     private RedissonClient redissonClient;
 
     @Autowired
     private RBloomFilter<Object> bloomFilter;
 
-    @Autowired
-    private RedisCellUtil redisCellUtil;
 
     @Autowired
     private RedisTemplate redisTemplate;
+
+    @Autowired
+    private RedisCellUtil redisCellUtil;
+
 
     @ResponseBody
     @RequestMapping("/setUser")
@@ -53,7 +53,7 @@ public class RedisController {
 
         String json = JSON.toJSONString(user);
 
-        stringRedisTemplate.opsForValue().set(user.getUserId().toString() , json);
+        redisTemplate.opsForValue().set(user.getUserId().toString() , json);
 
         return "success";
 
@@ -65,7 +65,7 @@ public class RedisController {
         Boolean lockFlag = true;
 
         String value = UUID.randomUUID().toString();
-        lockFlag = stringRedisTemplate.opsForValue().setIfAbsent(KEY, value, 10, TimeUnit.SECONDS);
+        lockFlag = redisTemplate.opsForValue().setIfAbsent(KEY, value, 10, TimeUnit.SECONDS);
 
         System.out.println("lock method is invoked key is :" + KEY + ", lockFlag is :" + lockFlag);
 
@@ -76,7 +76,7 @@ public class RedisController {
                 e.printStackTrace();
             }
             // 删除锁!
-            stringRedisTemplate.delete(KEY);
+            redisTemplate.delete(KEY);
         }
 
         return lockFlag;
@@ -119,10 +119,10 @@ public class RedisController {
         String key = "www.deep.com";
 
         for(int i = 0; i < 100000; i++) {
-            stringRedisTemplate.opsForHyperLogLog().add(key, "user_" + i);
+            redisTemplate.opsForHyperLogLog().add(key, "user_" + i);
         }
 
-        return stringRedisTemplate.opsForHyperLogLog().size(key);
+        return redisTemplate.opsForHyperLogLog().size(key);
     }
 
 
@@ -178,13 +178,13 @@ public class RedisController {
 
         String key = "199001_Yang";
 
-        stringRedisTemplate.opsForZSet().removeRangeByScore(key, 0, zero.getTime());
-        long count = stringRedisTemplate.opsForZSet().zCard(key);
+        redisTemplate.opsForZSet().removeRangeByScore(key, 0, zero.getTime());
+        long count = redisTemplate.opsForZSet().zCard(key);
         System.out.println("set_nickname count is :" + count);
 
         if(count < maxCount){
             Long score = System.currentTimeMillis();
-            stringRedisTemplate.opsForZSet().add(key, String.valueOf(score), Double.valueOf(score));
+            redisTemplate.opsForZSet().add(key, String.valueOf(score), Double.valueOf(score));
             return true;
         } else {
             return false;
@@ -214,9 +214,39 @@ public class RedisController {
     public String geoHash(double longitude, double latitude, String member) {
         String key = "company";
         Point point = new Point(longitude, latitude);
-        Long result = stringRedisTemplate.opsForGeo().add(key, point, member);
+        Long result = redisTemplate.opsForGeo().add(key, point, member);
         System.out.println("geoHash");
         return "success";
+    }
+
+    @ResponseBody
+    @RequestMapping("/redis_watch")
+    public Object redisWatch() {
+        String key = "books";
+
+        // 开始事务功能
+        redisTemplate.setEnableTransactionSupport(true);
+
+        // 使用 redis watch 功能
+        redisTemplate.watch(key);
+
+        SessionCallback callback = new SessionCallback() {
+            @Override
+            public Object execute(RedisOperations operations) throws DataAccessException {
+                operations.multi();
+                operations.opsForValue().increment(key);
+                operations.opsForValue().increment(key);
+                operations.opsForValue().increment(key);
+                return operations.exec();
+            }
+        };
+
+        Object execute = redisTemplate.execute(callback);
+
+        // 举例: redis watch method invoke the execute is :[1,2,3]
+        System.out.println("redis watch method invoke the execute is :" + JSON.toJSONString(execute));
+
+        return execute;
     }
 
 

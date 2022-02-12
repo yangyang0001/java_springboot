@@ -1,0 +1,46 @@
+-------------------------------------------------------------------- 主从模式加哨兵机制安装 --------------------------------------------------------
+
+
+按照 master slave slave 在一台主机上安装就OK了!
+
+cd /home/redis
+mkdir 6379
+mkdir 6479
+mkdir 6579
+
+
+./redis-cli -h 127.0.0.1 -p 6379 -a root
+./redis-cli -h 127.0.0.1 -p 6479 -a root
+./redis-cli -h 127.0.0.1 -p 6579 -a root
+
+./redis-server ../6379/redis_6379.conf
+./redis-server ../6479/redis_6479.conf
+./redis-server ../6579/redis_6579.conf
+
+./redis-sentinel ../6379/sentinel_26379.conf
+./redis-sentinel ../6479/sentinel_26479.conf
+./redis-sentinel ../6579/sentinel_26579.conf
+
+info sentinel
+
+cat /home/redis/6379/redis_6379.conf | grep replicaof
+cat /home/redis/6479/redis_6479.conf | grep replicaof
+cat /home/redis/6579/redis_6579.conf | grep replicaof
+
+
+vim /home/redis/6379/redis_6379.conf
+vim /home/redis/6479/redis_6479.conf
+vim /home/redis/6579/redis_6579.conf
+
+cat /home/redis/6379/redis_6379.conf | grep protected-mode
+cat /home/redis/6479/redis_6479.conf | grep protected-mode
+cat /home/redis/6579/redis_6579.conf | grep protected-mode
+
+
+vim /home/redis/6379/sentinel_26379.conf
+vim /home/redis/6479/sentinel_26479.conf
+vim /home/redis/6579/sentinel_26579.conf
+
+cat /home/redis/6379/sentinel_26379.conf | grep protected-mode
+cat /home/redis/6479/sentinel_26479.conf | grep protected-mode
+cat /home/redis/6579/sentinel_26579.conf | grep protected-mode

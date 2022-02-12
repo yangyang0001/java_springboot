@@ -62,5 +62,9 @@ public class TestObject {
         System.out.println(System.currentTimeMillis());
 
 
+        System.out.println(16384/4);
+        System.out.println();
+
+
     }
 }
