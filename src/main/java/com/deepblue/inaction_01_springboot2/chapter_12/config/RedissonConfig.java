@@ -43,7 +43,9 @@ public class RedissonConfig {
 //        RedissonClient client = Redisson.create(config);
 //        return client;
 
-        // TODO 源码中提供的例子是错的, 按照下面的方式配置!
+        /**
+         * TODO 源码中提供的例子是错的, 按照下面的方式配置! RedisCluster 集群配置方式, 以后只是用这种方式!
+         */
         Config config = new Config();
         config.useClusterServers().addNodeAddress(
                 "redis://192.168.188.9:6179",

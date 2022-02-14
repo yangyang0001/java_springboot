@@ -1,11 +1,15 @@
 package com.deepblue.inaction_04_redis_deep_adventure.chapter_01;
 
 import com.deepblue.inaction_01_springboot2.chapter_12.util.BinaryUtil;
+import net.bytebuddy.implementation.bytecode.Division;
+import sun.misc.CRC16;
+import sun.security.krb5.internal.crypto.Crc32CksumType;
 
 import java.text.SimpleDateFormat;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.Random;
+import java.util.zip.CRC32;
 
 /**
  *
@@ -63,8 +67,6 @@ public class TestObject {
 
 
         System.out.println(16384/4);
-        System.out.println();
-
 
     }
 }

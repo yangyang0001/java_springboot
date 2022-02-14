@@ -116,6 +116,13 @@
             <version>29.0-jre</version>
         </dependency>
 
+        <!-- https://mvnrepository.com/artifact/com.github.snksoft/crc -->
+        <dependency>
+            <groupId>com.github.snksoft</groupId>
+            <artifactId>crc</artifactId>
+            <version>1.0.2</version>
+        </dependency>
+
 
     </dependencies>
 

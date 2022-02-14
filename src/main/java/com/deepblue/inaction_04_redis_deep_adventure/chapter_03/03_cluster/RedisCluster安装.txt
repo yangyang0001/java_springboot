@@ -51,7 +51,11 @@ mv redis_6679.conf 6679/
 ./redis-server ../6679/redis_6679.conf
 
 
+-c 是官方提供的 -cluster 的意思!
+
 ./redis-cli -h 127.0.0.1 -p 6179 -a root -c 就可以使用官方客户端了!
+./redis-cli -h 127.0.0.1 -p 6279 -a root -c
+./redis-cli -h 127.0.0.1 -p 6379 -a root -c
 
 
 命令查看当前集群的节点:
