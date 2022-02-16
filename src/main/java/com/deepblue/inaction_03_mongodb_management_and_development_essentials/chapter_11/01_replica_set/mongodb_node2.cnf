@@ -1,0 +1,29 @@
+# mongodb.conf
+
+# Where to store the data.
+dbpath=/home/mongodb-linux-x86_64-rhel70-5.0.5/data/node2/db
+directoryperdb=true
+
+# where to log
+logpath=/home/mongodb-linux-x86_64-rhel70-5.0.5/data/node2/logs/mongodb.log
+logappend=true
+
+# Turn on/off security. off is currently the default
+# noauth = true
+auth = true
+
+# daemon flag
+fork = true
+pidfilepath=/home/mongodb-linux-x86_64-rhel70-5.0.5/data/node2/mongodb.pid
+
+# ip and port
+bind_ip = 192.168.188.10
+port = 27018
+
+# replica set
+replSet=mine-repica-set
+oplogSize=10000
+
+# replica set key file
+keyFile=/home/mongodb-linux-x86_64-rhel70-5.0.5/data/key/node2
+
