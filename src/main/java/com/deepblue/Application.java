@@ -1,5 +1,8 @@
 package com.deepblue;
 
+import com.deepblue.inaction_00_spring.chapter_07.example_001_annotation.Main;
+import org.apache.dubbo.config.spring.context.annotation.DubboComponentScan;
+import org.apache.dubbo.config.spring.context.annotation.EnableDubbo;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.autoconfigure.data.mongo.MongoDataAutoConfiguration;
@@ -18,3 +21,4 @@ public class Application {
     }
 
 }
+

@@ -50,7 +50,9 @@ public class ZkClientExample {
 //        zkClient.delete("/security_books0000000024");
 //
 //        // 递归删除
-//        zkClient.deleteRecursive("/concurre_books");
+        zkClient.deleteRecursive("/dubbo");
+        zkClient.deleteRecursive("/dubbo-dev");
+        zkClient.deleteRecursive("/concurre_books");
 //        zkClient.deleteRecursive("/security_books0000000029");
 
     }
