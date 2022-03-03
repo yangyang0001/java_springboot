@@ -17,9 +17,17 @@ public class DubboController {
     @Reference
     private EchoService echoService;
 
-    @RequestMapping("/invokeEcho")
+    @RequestMapping("/invokeHello")
     @ResponseBody
-    public String invokeEchoMethod(String username) {
+    public String invokeHello() {
+        return echoService.sayHello();
+    }
+
+    @RequestMapping("/invokeHelloParam")
+    @ResponseBody
+    public String invokeHelloParam(String username) {
         return echoService.sayHello(username);
     }
+
+
 }
