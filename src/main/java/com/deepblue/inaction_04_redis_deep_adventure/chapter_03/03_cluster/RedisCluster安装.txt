@@ -60,7 +60,7 @@ mv redis_6679.conf 6679/
 命令查看当前集群的节点:
     cluster nodes
 
-使用客户端命令来创建进群:
+使用客户端命令来创建集群:
     [root@localhost bin]# ./redis-cli --cluster help
     Cluster Manager Commands:
       create         host1:port1 ... hostN:portN
