@@ -869,4 +869,6 @@ TODO 我们该如何选择我们的存储引擎呢?
                     SHOW FULL PROCESSLIST;
 
 
-
+常见查询类型:
+    根据 last_query_cost 来看, 扫描4K数据页的 数量从少到多:
+    NULL < system < const < eq_ref < ref < range < index < all
