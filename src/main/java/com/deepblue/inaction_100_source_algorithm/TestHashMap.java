@@ -1,6 +1,7 @@
-package com.deepblue.inaction_100_algorithm;
+package com.deepblue.inaction_100_source_algorithm;
 
 import java.util.HashMap;
+import java.util.stream.Stream;
 
 /**
  *
@@ -11,7 +12,14 @@ public abstract class TestHashMap {
 
     public static void main(String[] args) {
 
-        HashMap<String, String> map = new HashMap<>();
+        HashMap<String, Integer> map = new HashMap<>();
+
+        map.put("one", 1);
+        map.put("two", 2);
+        map.put("three", 3);
+        map.put(null, 4);
+
+        Stream.of(map).forEach(System.out::println);
 
         System.out.println(tableSizeFor(8));
 

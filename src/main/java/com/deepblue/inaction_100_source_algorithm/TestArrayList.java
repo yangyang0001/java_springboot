@@ -1,9 +1,8 @@
-package com.deepblue.inaction_100_algorithm;
+package com.deepblue.inaction_100_source_algorithm;
 
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.ListIterator;
 import java.util.concurrent.CountDownLatch;
 
 /**

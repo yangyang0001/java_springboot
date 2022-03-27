@@ -1,4 +1,4 @@
-//package com.deepblue.inaction_100_algorithm;
+package com.deepblue.inaction_100_source_algorithm;
 //
 ///**
 // *

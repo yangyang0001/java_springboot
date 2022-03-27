@@ -1,21 +1,31 @@
 数据结构参考地址: https://www.cs.usfca.edu/~galles/visualization/RedBlack.html
 
 ArrayList 源码解读:
-    ArrayList 允许存在 NULL 值!
-    ArrayList 是不同步的类, 即线程不安全的类, DEFAULT_CAPACITY = 10
+    ArrayList 允许存在 null 值!
+    ArrayList 是不同步的类, 即线程不安全的类
+    ArrayList 初始容量默认值为10; DEFAULT_CAPACITY = 10
     ArrayList ListIterator创建之后, 只能通过 ListIterator 进行 remove, add 来修改数组的结构, 否则 抛出 ConcurrentModificationException
     ArrayList ListIterator创建之后, 同步修改时会触发快速失败;
     ArrayList 扩容策略: 在 grow(..) 方法中 int newCapacity = oldCapacity + (oldCapacity >> 1); 扩容为 原始的 1.5倍!
 
+
+Hashtable 源码解读:
+    Hashtable 不允许 key = null 或 value = null 的情况!
+    Hashtable 是同步类, 即线程安全的类, 内部采用 synchronized 方法实现!
+    容量: 指 Hashtable 中 桶的个数!
+    初始容量: 指 Hashtable 创建时桶的个数, 默认初始容量为 11; 代码在 new Hashtable() 构造中!
+    负载因子: 指 Hashtable 扩容之前, 允许达到程度的度量! 默认负载因子为 loadFactor = 0.75f; 代码在 new Hashtable() 构造中!
+    使用推荐: 如果想使用非线程安全的 key/value 类, 建议使用 HashMap 代替 Hashtable
+           　如果想使用线程安全的 　key/value 类, 建议使用 ConcurrentHashMap 代替 Hashtable
+
+
 HashMap 源码解读:
-    HashMap 允许存在 key = NULL, value = NULL
+    HashMap 允许存在 key = null, value = null
     HashMap 是不同步的类, 即线程不安全的类
     HashMap 核心属性 初始容量 和 负载因子, 初始容量默认值: DEFAULT_CAPACITY = 16; 初始负载因子默认值: DEFAULT_LOAD_FACTOR = 0.75f;
-    HashMap 桶分裂为 TreeNodes 的条件: 桶的深度至少为8, 桶的总个数至少为64;  TREEIFY_THRESHOLD = 8;  MIN_TREEIFY_CAPACITY = 64;
-
+    HashMap 桶分裂为 TreeNodes 的条件: 桶的深度至少为8, 桶的总个数至少为64;  　TREEIFY_THRESHOLD = 8;  MIN_TREEIFY_CAPACITY = 64;
     HashMap TreeNodes 合并为 链表的条件, 当 TreeNodes 中元素的个数小于6;     UNTREEIFY_THRESHOLD = 6;
     HashMap 扩容策略: 在 resize() 方法中 newCap = oldCap << 1; 扩容为 原始的 2倍!
-
 
     二项式分布概率: P(X=k) = C(n, k) p^k (1-p)^(n-k)
 
@@ -56,12 +66,18 @@ HashMap 源码解读:
     红黑树的规则:
         1、任何一个节点都必须有一种颜色, 不是红色就是黑色!
         2、根节点必须是黑色!
-        3、NULL 节点必须是黑色!
+        3、null 节点必须是黑色!
         4、如果一个非空节点为红色, 则子节点一定为黑色!
-        5、从根节点到 任何一个NULL节点 所经过的 黑色节点个数 必须一样!
+        5、从根节点到 任何一个null节点 所经过的 黑色节点个数 必须一样!
 
 
-
+ConcurrentHashMap 源码解析:
+    ConcurrentHashMap 不允许存在 key = null 或者 value = null
+    ConcurrentHashMap 是同步的类, 即线程安全的类
+    ConcurrentHashMap 核心属性 初始容量 和 负载因子, 初始容量默认值: DEFAULT_CAPACITY = 16; 初始负载因子默认值: DEFAULT_LOAD_FACTOR = 0.75f;
+    ConcurrentHashMap 桶分裂为 TreeNodes 的条件: 桶的深度至少为8, 桶的总个数至少为64;  　TREEIFY_THRESHOLD = 8;  MIN_TREEIFY_CAPACITY = 64;
+    ConcurrentHashMap TreeNodes 合并为 链表的条件, 当 TreeNodes 中元素的个数小于6;     UNTREEIFY_THRESHOLD = 6;
+    ConcurrentHashMap 扩容策略: 在 resize() 方法中 newCap = oldCap << 1; 扩容为 原始的 2倍!
 
 
 
