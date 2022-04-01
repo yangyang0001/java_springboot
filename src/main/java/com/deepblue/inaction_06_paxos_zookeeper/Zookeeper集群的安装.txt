@@ -100,6 +100,17 @@
     Using config: /home/zookeeper-3.4.3/bin/../conf/zoo.cfg
     Mode: observer
 
+5、查看节点下的内容
+[zk: localhost:2181(CONNECTED) 13] ls /dubbo-group/com.deepblue.api.EchoService/providers
+[dubbo%3A%2F%2F127.0.0.1%3A20882%2Fcom.deepblue.api.EchoService%3Fanyhost%3Dtrue%26application%3Ddubbo-provider%26bean.name%3Dproviders%3Adubbo%3AechoService%26default.deprecated%3Dfalse%26default.dynamic%3Dfalse%26default.register%3Dtrue%26deprecated%3Dfalse%26dubbo%3D2.0.2%26dynamic%3Dfalse%26generic%3Dfalse%26interface%3Dcom.deepblue.api.EchoService%26methods%3DsayHello%26pid%3D49356%26register%3Dtrue%26release%3D2.7.1%26side%3Dprovider%26timestamp%3D1648803446283, dubbo%3A%2F%2F127.0.0.1%3A20881%2Fcom.deepblue.api.EchoService%3Fanyhost%3Dtrue%26application%3Ddubbo-provider%26bean.name%3Dproviders%3Adubbo%3AechoService%26default.deprecated%3Dfalse%26default.dynamic%3Dfalse%26default.register%3Dtrue%26deprecated%3Dfalse%26dubbo%3D2.0.2%26dynamic%3Dfalse%26generic%3Dfalse%26interface%3Dcom.deepblue.api.EchoService%26methods%3DsayHello%26pid%3D49341%26register%3Dtrue%26release%3D2.7.1%26side%3Dprovider%26timestamp%3D1648803391565]
+
+[   // EchoService 中定义了两个方法 sayHello() 和 sayHello(String username);e
+    // TODO 但是在 zookeeper 的临时节点中只有一个 sayHello 方法, zookeeper 是不能通过函数特征标 (也称参数列表) 区分方法的, 所以这种 重名接口函数 尽量少用 或者 不用!
+    dubbo://127.0.0.1:20882/com.deepblue.api.EchoService?anyhost=true&application=dubbo-provider&bean.name=providers:dubbo:echoService&default.deprecated=false&default.dynamic=false&default.register=true&deprecated=false&dubbo=2.0.2&dynamic=false&generic=false&interface=com.deepblue.api.EchoService&methods=sayHello&pid=49356&register=true&release=2.7.1&side=provider&timestamp=1648803446283,
+    dubbo://127.0.0.1:20881/com.deepblue.api.EchoService?anyhost=true&application=dubbo-provider&bean.name=providers:dubbo:echoService&default.deprecated=false&default.dynamic=false&default.register=true&deprecated=false&dubbo=2.0.2&dynamic=false&generic=false&interface=com.deepblue.api.EchoService&methods=sayHello&pid=49341&register=true&release=2.7.1&side=provider&timestamp=1648803391565
+]
+
+
 -------------------------------------------------------------------- 集群监控 --------------------------------------------------------
 下载地址 https://github.com/DeemOpen/zkui.git
 
@@ -108,3 +119,6 @@
 参考工程 zkui, 直接启动里面的 main 方法就OK了
 
 访问连接 http://localhost:9090
+
+
+
