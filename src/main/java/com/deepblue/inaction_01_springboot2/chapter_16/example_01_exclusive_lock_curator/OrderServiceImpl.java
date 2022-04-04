@@ -2,10 +2,10 @@ package com.deepblue.inaction_01_springboot2.chapter_16.example_01_exclusive_loc
 
 import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.framework.recipes.locks.InterProcessMutex;
-import org.apache.dubbo.config.annotation.Service;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
 
 import java.util.concurrent.TimeUnit;
 

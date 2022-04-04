@@ -15,8 +15,6 @@
     <name>java_springboot</name>
     <description>project for spring boot</description>
 
-    <packaging>pom</packaging>
-
     <modules>
         <module>dubbo-provider</module>
         <module>dubbo-provider-api</module>

@@ -1,13 +1,7 @@
 package com.deepblue;
 
-import com.deepblue.inaction_00_spring.chapter_07.example_001_annotation.Main;
-import org.apache.dubbo.config.spring.context.annotation.DubboComponentScan;
-import org.apache.dubbo.config.spring.context.annotation.EnableDubbo;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
-import org.springframework.boot.autoconfigure.data.mongo.MongoDataAutoConfiguration;
-import org.springframework.boot.autoconfigure.mongo.MongoAutoConfiguration;
-import org.springframework.data.elasticsearch.repository.config.EnableElasticsearchRepositories;
 
 //此处的配置 取消 MongoDB 的自动注入, 可以配合 MongoDBConfig.java 使用!
 //@SpringBootApplication(exclude = {MongoAutoConfiguration.class, MongoDataAutoConfiguration.class})
