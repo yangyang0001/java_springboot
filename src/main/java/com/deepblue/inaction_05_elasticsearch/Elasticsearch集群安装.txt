@@ -6,22 +6,22 @@
     jdk-8u311-linux-x64.tar.gz
 
 2、安装Elasticsearch
-    elasticsearch-5.0.0.tar.gz
+    elasticsearch-6.5.0.tar.gz
 
     创建用户 yang 密码: Yang199001, 以下命令在 root 用户下执行!
     useradd elastic_yang
     passwd elastic_yang
 
-    Yangjianwei01
+    用户: elastic_yang  密码: Yangjianwei01
 
     给用户赋权限
-    chown elastic_yang /home/elasticsearch-5.0.0/ -R
+    chown elastic_yang /home/elasticsearch-6.5.0/ -R
 
 3、启动Elasticsearch daemon 方式启动: -d
 
     su elastic_yang
 
-    cd /home/elasticsearch-5.0.0/bin
+    cd /home/elasticsearch-6.5.0/bin
 
     ./elasticsearch -d
 
@@ -232,7 +232,23 @@
 
 
 
-安装 Head 插件:
+安装并启动 Head 插件:
+
+    首先安装 nodejs
+    wget https://nodejs.org/dist/v10.0.0/node-v10.0.0-linux-x64.tar.gz
+
+    // 以下运行一个就OK了 (使用不同的镜像)
+    npm install -g grunt-cli --registry=https://registry.npm.taobao.org
+    npm install -g grunt-cli --registry=https://registry.npmmirror.com
+    npm install -g grunt-cli --registry=https://mirrors.huaweicloud.com/repository/npm/
+
+    grunt -version
+
+    npm install -g cnpm --registry=https://registry.npm.taobao.org
+
+    cd /home/elasticsearch-head/node_modules/grunt/bin
+    ./grunt server &
+
     http://192.168.188.12:9100/
 
 安装 Kibana 客户端:
