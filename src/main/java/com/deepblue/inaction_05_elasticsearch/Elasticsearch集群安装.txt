@@ -250,10 +250,11 @@
 
 启动顺序:
     Elasticsearch相当于MySQL, ElasticSearch-head 相当于客户端链接工具! 所以首先启动Elasticsearch, 再启动Elasticsearch-Head插件!
-    
+
+    su elastic_yang
     cd /home/elasticsearch-6.5.0/bin
     ./elasticsearch -d
-    
+
     cd /home/elasticsearch-head/node_modules/grunt/bin
     ./grunt server &
 
@@ -268,3 +269,6 @@
 
     访问地址
         http://192.168.188.12:5601/
+
+
+Index 创建默认的 shards (默认 主分片个数为 5), replias (默认 每个主分片的副本个数为 1)

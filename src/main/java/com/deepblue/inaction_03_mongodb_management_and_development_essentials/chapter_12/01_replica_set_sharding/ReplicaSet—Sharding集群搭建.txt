@@ -1,0 +1,242 @@
+-------------------------------------------------------------------- 复制集 + 分片 搭建 --------------------------------------------------------
+
+
+3台主机, 架构图参考: mongodb_repica-set-sharding_集群.jpg
+
+在 Server A 上创建目录
+    cd /home/mongodb-linux-x86_64-rhel70-5.0.5/data
+
+    mkdir shard1_1
+    mkdir shard2_1
+    mkdir config
+
+在 Server B 上创建目录
+    cd /home/mongodb-linux-x86_64-rhel70-5.0.5/data
+
+    mkdir shard1_2
+    mkdir shard2_2
+    mkdir config
+
+在 Server C 上创建目录
+    cd /home/mongodb-linux-x86_64-rhel70-5.0.5/data
+
+    mkdir shard1_3
+    mkdir shard2_3
+    mkdir config
+
+
+---------------------------------------- 再次之命令从此处开始 -----------------------------------
+配置 ReplicaSet 1
+
+    在 Server A 上 执行命令
+
+    cd /home/mongodb-linux-x86_64-rhel70-5.0.5/bin
+    mongod --shardsvr --replSet shard1 --bind_ip 0.0.0.0 --port 27017 --dbpath /home/mongodb-linux-x86_64-rhel70-5.0.5/data/shard1_1 \
+    --logpath /home/mongodb-linux-x86_64-rhel70-5.0.5/data/shard1_1/shard1_1.log --logappend --fork
+
+
+    在 Server B 上 执行命令
+
+    cd /home/mongodb-linux-x86_64-rhel70-5.0.5/bin
+    mongod --shardsvr --replSet shard1 --bind_ip 0.0.0.0 --port 27017 --dbpath /home/mongodb-linux-x86_64-rhel70-5.0.5/data/shard1_2 \
+    --logpath /home/mongodb-linux-x86_64-rhel70-5.0.5/data/shard1_2/shard1_2.log --logappend --fork
+
+    在 Server C 上 执行命令
+
+    cd /home/mongodb-linux-x86_64-rhel70-5.0.5/bin
+    mongod --shardsvr --replSet shard1 --bind_ip 0.0.0.0 --port 27017 --dbpath /home/mongodb-linux-x86_64-rhel70-5.0.5/data/shard1_3 \
+    --logpath /home/mongodb-linux-x86_64-rhel70-5.0.5/data/shard1_3/shard1_3.log --logappend --fork
+
+初始化 ReplicaSet 1
+    连接任意一台 Server 的 27017 端口
+    cd /home/mongodb-linux-x86_64-rhel70-5.0.5/bin
+    mongo --port 27017
+
+    客户端下执行初始化命令:
+    config = {_id: "shard1", members :[
+        {"_id":0, "host":"192.168.188.30:27017"},
+        {"_id":1, "host":"192.168.188.31:27017"},
+        {"_id":2, "host":"192.168.188.32:27017"}]
+    }
+    rs.initiate(config)
+
+配置 ReplicaSet 2
+
+    在 Server A 上 执行命令
+
+    cd /home/mongodb-linux-x86_64-rhel70-5.0.5/bin
+    mongod --shardsvr --replSet shard2 --bind_ip 0.0.0.0 --port 27018 --dbpath /home/mongodb-linux-x86_64-rhel70-5.0.5/data/shard2_1 \
+    --logpath /home/mongodb-linux-x86_64-rhel70-5.0.5/data/shard2_1/shard2_1.log --logappend --fork
+
+
+    在 Server B 上 执行命令
+
+    cd /home/mongodb-linux-x86_64-rhel70-5.0.5/bin
+    mongod --shardsvr --replSet shard2 --bind_ip 0.0.0.0 --port 27018 --dbpath /home/mongodb-linux-x86_64-rhel70-5.0.5/data/shard2_2 \
+    --logpath /home/mongodb-linux-x86_64-rhel70-5.0.5/data/shard2_2/shard2_2.log --logappend --fork
+
+    在 Server C 上 执行命令
+
+    cd /home/mongodb-linux-x86_64-rhel70-5.0.5/bin
+    mongod --shardsvr --replSet shard2 --bind_ip 0.0.0.0 --port 27018 --dbpath /home/mongodb-linux-x86_64-rhel70-5.0.5/data/shard2_3 \
+    --logpath /home/mongodb-linux-x86_64-rhel70-5.0.5/data/shard2_3/shard2_3.log --logappend --fork
+
+初始化 ReplicaSet 2
+    连接任意一台 Server 的 27018 端口
+    cd /home/mongodb-linux-x86_64-rhel70-5.0.5/bin
+    mongo --port 27018
+
+    客户端下执行初始化命令:
+    config = {_id: "shard2", members :[
+        {"_id":0, "host":"192.168.188.30:27018"},
+        {"_id":1, "host":"192.168.188.31:27018"},
+        {"_id":2, "host":"192.168.188.32:27018"}]
+    }
+    rs.initiate(config)
+
+
+配置3台 Config Server
+    在 Server A, Server B, Server C 上执行命令; TODO 这里特别注意一下, --replSet=cfgReplSet 也类似于 ReplicaSet 集群 起相同的名字, 此处暂定为 cfgReplSet
+
+    cd /home/mongodb-linux-x86_64-rhel70-5.0.5/bin
+
+    mongod --configsvr --replSet cfgReplSet --dbpath /home/mongodb-linux-x86_64-rhel70-5.0.5/data/config --bind_ip 0.0.0.0 --port 20000 --logpath /home/mongodb-linux-x86_64-rhel70-5.0.5/data/config/config.log --logappend --fork
+
+初始化 Config Server 为 ReplicaSet 集群
+    连接任意一台 Server 的 20000 端口
+    cd /home/mongodb-linux-x86_64-rhel70-5.0.5/bin
+    mongo --port 20000
+
+    客户端下执行初始化命令:
+    config = {_id: "cfgReplSet", members :[
+        {"_id":0, "host":"192.168.188.30:20000"},
+        {"_id":1, "host":"192.168.188.31:20000"},
+        {"_id":2, "host":"192.168.188.32:20000"}]
+    }
+    rs.initiate(config)
+
+
+配置3台 Route Process
+    在 Server A, Server B, Server C 上执行命令
+
+    cd /home/mongodb-linux-x86_64-rhel70-5.0.5/bin
+    mongos --configdb cfgReplSet/192.168.188.30:20000,192.168.188.31:20000,192.168.188.32:20000 --bind_ip 0.0.0.0 --port 30000 --logpath /home/mongodb-linux-x86_64-rhel70-5.0.5/data/mongos.log --logappend --fork
+
+
+每个服务器中启动的进程类似为:
+    ps -ef|grep mongo
+    root       1745      1  1 01:04 ?        00:01:42 mongod --shardsvr --replSet shard1 --bind_ip 0.0.0.0 --port 27017 --dbpath /home/mongodb-linux-x86_64-rhel70-5.0.5/data/shard1_2 --logpath /home/mongodb-linux-x86_64-rhel70-5.0.5/data/shard1_2/shard1_2.log --logappend --fork
+    root       1829      1  3 01:07 ?        00:03:50 mongod --shardsvr --replSet shard2 --bind_ip 0.0.0.0 --port 27018 --dbpath /home/mongodb-linux-x86_64-rhel70-5.0.5/data/shard2_2 --logpath /home/mongodb-linux-x86_64-rhel70-5.0.5/data/shard2_2/shard2_2.log --logappend --fork
+    root       2186      1  2 02:00 ?        00:01:23 mongod --configsvr --replSet cfgReplSet --dbpath /home/mongodb-linux-x86_64-rhel70-5.0.5/data/config --bind_ip 0.0.0.0 --port 20000 --logpath /home/mongodb-linux-x86_64-rhel70-5.0.5/data/config/config.log --logappend --fork
+    root       2328      1  0 02:08 ?        00:00:11 mongos --configdb cfgReplSet/192.168.188.30:20000,192.168.188.31:20000,192.168.188.32:20000 --bind_ip 0.0.0.0 --port 30000 --logpath /home/mongodb-linux-x86_64-rhel70-5.0.5/data/mongos.log --logappend --fork
+    root       3133   1568  0 03:02 pts/0    00:00:00 grep --color=auto mongo
+
+
+配置 Shard Cluster
+    连接任意一台 Server 的 30000 端口
+    cd /home/mongodb-linux-x86_64-rhel70-5.0.5/bin
+
+    mongo --host 192.168.188.30 --port 30000
+
+    添加shard分片功能到集群中
+    use admin
+    db.runCommand({addshard: "shard1/192.168.188.30:27017,192.168.188.31:27017,192.168.188.32:27017"})
+    db.runCommand({addshard: "shard2/192.168.188.30:27018,192.168.188.31:27018,192.168.188.32:27018"})
+
+    激活数据库的分片功能:
+    db.runCommand({enablesharding : "test"})
+    激活数据库中表的分片功能:
+    db.runCommand({shardcollection : "test.users", key : {_id : 1}})
+
+
+    TODO 结果如下:
+
+        mongos> use admin
+        switched to db admin
+        mongos> db.runCommand({addshard: "shard1/192.168.188.30:27017, 192.168.188.31:27017, 192.168.188.32:27017"})
+        {
+                "shardAdded" : "shard1",
+                "ok" : 1,
+                "$clusterTime" : {
+                        "clusterTime" : Timestamp(1649528907, 1),
+                        "signature" : {
+                                "hash" : BinData(0,"AAAAAAAAAAAAAAAAAAAAAAAAAAA="),
+                                "keyId" : NumberLong(0)
+                        }
+                },
+                "operationTime" : Timestamp(1649528907, 1)
+        }
+        mongos> db.runCommand({addshard: "shard2/192.168.188.30:27018, 192.168.188.31:27018, 192.168.188.32:27018"})
+        {
+                "shardAdded" : "shard2",
+                "ok" : 1,
+                "$clusterTime" : {
+                        "clusterTime" : Timestamp(1649528913, 1),
+                        "signature" : {
+                                "hash" : BinData(0,"AAAAAAAAAAAAAAAAAAAAAAAAAAA="),
+                                "keyId" : NumberLong(0)
+                        }
+                },
+                "operationTime" : Timestamp(1649528913, 1)
+        }
+
+
+        将数据库用做 能够分片
+        mongos> db.runCommand({enablesharding : "test"})
+        {
+                "ok" : 1,
+                "$clusterTime" : {
+                        "clusterTime" : Timestamp(1649528934, 3),
+                        "signature" : {
+                                "hash" : BinData(0,"AAAAAAAAAAAAAAAAAAAAAAAAAAA="),
+                                "keyId" : NumberLong(0)
+                        }
+                },
+                "operationTime" : Timestamp(1649528934, 2)
+        }
+
+        将数据库中的表用做 能够分片
+        mongos> db.runCommand({shardcollection : "test.users", key : {_id : 1}})
+        {
+                "collectionsharded" : "test.users",
+                "ok" : 1,
+                "$clusterTime" : {
+                        "clusterTime" : Timestamp(1649528941, 26),
+                        "signature" : {
+                                "hash" : BinData(0,"AAAAAAAAAAAAAAAAAAAAAAAAAAA="),
+                                "keyId" : NumberLong(0)
+                        }
+                },
+                "operationTime" : Timestamp(1649528941, 22)
+        }
+
+
+验证Sharding
+    连接任意一台 Server 的 30000 端口
+    cd /home/mongodb-linux-x86_64-rhel70-5.0.5/bin
+
+    mongo --host 192.168.188.30 --port 30000
+
+    mongos> use test
+    mongos> for(var i = 0; i < 200000; i++) {db.users.insert({"id": i, "address_1": "Beijing", "address_2": "Shanghai"});}
+
+    mongos> db.users.stats()
+
+
+
+TODO 使用注意: 每次创建新的数据库和新的表必须执行:
+
+    连接任意一台 Server 的 30000 端口
+    cd /home/mongodb-linux-x86_64-rhel70-5.0.5/bin
+    mongo --host 192.168.188.30 --port 30000
+
+    激活数据库的分片功能, 举例如下:
+    sh.enableSharding("TDB1")
+    sh.enableSharding("TDB2")
+    sh.enableSharding("TDB3")
+    sh.enableSharding("TDB4")
+    激活数据库中表的分片功能, 举例如下:
+    sh.shardCollection("TDB1.test01", {_id:1})
+    sh.shardCollection("TDB2.test02", {_id:1})
+    sh.shardCollection("TDB3.test03", {_id:1})
+    sh.shardCollection("TDB4.test04", {_id:1})

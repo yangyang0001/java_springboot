@@ -55,6 +55,7 @@
     cat /home/mongodb-linux-x86_64-rhel70-5.0.5/data/node2/mongodb_node2.cnf
     cat /home/mongodb-linux-x86_64-rhel70-5.0.5/data/node3/mongodb_node3.cnf
 
+    连接客户端:
     cd /home/mongodb-linux-x86_64-rhel70-5.0.5/bin
 
     mongo --port 27017
