@@ -4,6 +4,9 @@ import com.alibaba.fastjson.JSON;
 import com.deepblue.inaction_05_elasticsearch.chapter_01.dao.BookDao;
 import com.deepblue.inaction_05_elasticsearch.chapter_01.dto.BookDTO;
 import com.google.common.collect.Lists;
+import org.elasticsearch.index.query.QueryBuilder;
+import org.elasticsearch.index.query.QueryBuilders;
+import org.elasticsearch.index.query.QueryStringQueryBuilder;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -72,7 +75,8 @@ public class BookController {
     @RequestMapping("/queryPageList")
     public String queryPageList(Integer pageNo, Integer pageSize) {
         PageRequest request = PageRequest.of(pageNo - 1, pageSize, Sort.by("id").ascending());
-        Page<BookDTO> page = bookDao.findAll(request);
+        QueryBuilder builder = QueryBuilders.wildcardQuery("name", "*elastic*");
+        Page<BookDTO> page = bookDao.search(builder, request);
 
         long total = page.getTotalElements();
         long pages = page.getTotalPages();

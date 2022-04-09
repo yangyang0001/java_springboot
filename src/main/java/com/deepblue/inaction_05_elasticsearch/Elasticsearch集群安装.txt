@@ -246,10 +246,25 @@
 
     npm install -g cnpm --registry=https://registry.npm.taobao.org
 
+
+
+启动顺序:
+    Elasticsearch相当于MySQL, ElasticSearch-head 相当于客户端链接工具! 所以首先启动Elasticsearch, 再启动Elasticsearch-Head插件!
+    
+    cd /home/elasticsearch-6.5.0/bin
+    ./elasticsearch -d
+    
     cd /home/elasticsearch-head/node_modules/grunt/bin
     ./grunt server &
 
+    访问head插件地址:
     http://192.168.188.12:9100/
 
 安装 Kibana 客户端:
-    http://192.168.188.12:5601/
+
+    启动kibana
+        cd /home/kibana-6.5.0-linux-x86_64/bin
+        ./kibana &
+
+    访问地址
+        http://192.168.188.12:5601/
