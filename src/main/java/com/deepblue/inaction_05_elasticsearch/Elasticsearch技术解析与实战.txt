@@ -30,3 +30,10 @@ Elasticsearch 主要干什么?
     路由: 文档存储的时候, 只存储在一个主节点中, 这个过程是通过某种hash算法来实现的! 举例 有3个主节点, key hash 值为 hash(key) % 3 = 节点值!
 
 
+数据逻辑结构:
+
+    文档 document, 类型 type, 索引 index
+
+    document   相当于  MySQL 中的 行!
+    type       相当于  MySQL 中的 表!
+    index      相当于  MySQL 中的 数据库!
