@@ -64,5 +64,14 @@ public class TestObject {
 
         System.out.println(16384/4);
 
+        long bits   = 4000000000L;      // bits
+        long bytes  = bits   / 8;       // Byte
+        long kbytes = bytes  / 1024;    // KB
+        long mbytes = kbytes / 1024;    // MB
+        System.out.println("bits   = " + bits  );
+        System.out.println("bytes  = " + bytes );
+        System.out.println("kbytes = " + kbytes);
+        System.out.println("mbytes = " + mbytes);
+
     }
 }

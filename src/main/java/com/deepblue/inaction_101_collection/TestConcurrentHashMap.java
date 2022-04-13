@@ -1,4 +1,4 @@
-package com.deepblue.inaction_100_source_algorithm;
+package com.deepblue.inaction_101_collection;
 
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Stream;
