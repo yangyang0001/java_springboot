@@ -19,7 +19,7 @@ public class PalindromeClient {
         node2.setNext(node3);
         node3.setNext(node4);
 
-        StringBuilder source = new StringBuilder(source(node1));
+        StringBuilder source = new StringBuilder(source(node1, ""));
 
         String sourcestr = source.toString();
         String revresstr = source.reverse().toString();
@@ -34,8 +34,7 @@ public class PalindromeClient {
 
     }
 
-    public static String source(Node node) {
-        String source = "";
+    public static String source(Node node, String source) {
 
         if(node != null) {
             source += node.getName();
@@ -43,7 +42,7 @@ public class PalindromeClient {
         System.out.println("node is : " + JSON.toJSONString(node) + ", source = " + source);
 
         if(node.getNext() != null) {
-            source = source(node.getNext());
+            source = source(node.getNext(), source);
         }
 
         return source;

@@ -5,10 +5,8 @@ import lombok.*;
 /**
  *
  */
-@Data
 @AllArgsConstructor
 @NoArgsConstructor
-@ToString
 @Builder
 public class Node {
 
@@ -16,4 +14,19 @@ public class Node {
 
     private Node next;
 
+    public String getName() {
+        return name;
+    }
+
+    public void setName(String name) {
+        this.name = name;
+    }
+
+    public Node getNext() {
+        return next;
+    }
+
+    public void setNext(Node next) {
+        this.next = next;
+    }
 }

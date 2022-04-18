@@ -1,5 +1,7 @@
 package com.deepblue.inaction_100_source_algorithm;
 
+import com.alibaba.fastjson.JSON;
+
 import java.util.ArrayList;
 
 /**
@@ -9,30 +11,25 @@ public class SortSelection {
 
     public static void main(String[] args) {
 
-        ArrayList<Integer> list = new ArrayList<>();
-        list.add(15);
-        list.add(10);
-        list.add(10);
-        list.add(9);
-        list.add(100);
-        list.add(88);
+        int[] arr = {19, 2, 33, 4, 5, 100};
 
-        for(int i = 0; i < list.size(); i++) {
-            int minIndex = i;
-            for(int j = i+1; j < list.size(); j++) {
-                int m = list.get(minIndex);
-                int n = list.get(j);
-                if(m > n) {
-                    minIndex = j;
+        int[] sort = sort(arr);
+        System.out.println(JSON.toJSONString(sort));
+
+    }
+
+    public static int[] sort(int[] arr) {
+
+        for(int i = 0; i < arr.length - 1; i++) {
+            for(int j = i+1; j < arr.length - 1; j++) {
+                if(arr[i] > arr[j]) {
+                    int temp = arr[i];
+                    arr[i] = arr[j];
+                    arr[j] = temp;
                 }
             }
-
-            int temp = list.get(i);
-            list.set(i, list.get(minIndex));
-            list.set(minIndex, temp);
         }
 
-        list.stream().forEach(System.out::println);
-
+        return arr;
     }
 }

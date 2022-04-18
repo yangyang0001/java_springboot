@@ -33,7 +33,11 @@ A8      B8      C8      D8      E8      F8      G8      H8
 高频算法题系列：链表
 
 【🔥】【有真题】高频算法题系列：字符串
-    快慢链表: 参考 MiddleSearch.java
+    快慢链表查找中间值: 参考 MiddleSearch.java
+    链表是否为回环链表: 参考 PalindromeClient.java
+    合并K个升序链表  : 参考 MergeClient.java
+    翻转链表:
+
 
 【🔥】【有真题】高频算法题系列：数组问题
 

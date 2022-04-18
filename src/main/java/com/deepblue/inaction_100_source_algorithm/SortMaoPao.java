@@ -1,5 +1,7 @@
 package com.deepblue.inaction_100_source_algorithm;
 
+import com.alibaba.fastjson.JSON;
+
 import java.util.ArrayList;
 
 /**
@@ -9,27 +11,25 @@ public class SortMaoPao {
 
     public static void main(String[] args) {
 
-        ArrayList<Integer> list = new ArrayList<>();
-        list.add(15);
-        list.add(10);
-        list.add(10);
-        list.add(9);
-        list.add(100);
-        list.add(88);
+        int[] arr = {19, 2, 33, 4, 5, 100};
 
-        for(int i = 0; i < list.size(); i++) {
-            for(int j = i+1; j < list.size(); j++) {
-                int m = list.get(i);
-                int n = list.get(j);
-                if(m > n) {
-                    int temp = m;
-                    list.set(i, n);
-                    list.set(j, m);
+        int[] sort = sort(arr);
+        System.out.println(JSON.toJSONString(sort));
+
+    }
+
+    public static int[] sort(int[] arr) {
+
+        for(int i = 1; i < arr.length; i++) {
+            for(int j = 0; j < arr.length - i; j++) {
+                if(arr[j] > arr[j+1]) {
+                    int temp = arr[j];
+                    arr[j] = arr[j+1];
+                    arr[j+1] = temp;
                 }
             }
         }
 
-        list.stream().forEach(System.out::println);
-
+        return arr;
     }
 }

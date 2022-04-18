@@ -1,5 +1,7 @@
 package com.deepblue.inaction_100_source_algorithm;
 
+import com.alibaba.fastjson.JSON;
+
 import java.util.ArrayList;
 
 /**
@@ -10,34 +12,28 @@ import java.util.ArrayList;
 public class SortInsert {
 
     public static void main(String[] args) {
-        int count = 0;
+        int[] arr = {19, 2, 33, 4, 5, 100};
 
-        ArrayList<Integer> list = new ArrayList<>();
-        list.add(15);
-        list.add(10);
-        list.add(10);
-        list.add(9);
-        list.add(100);
-        list.add(88);
+        int[] sort = sort(arr);
+        System.out.println(JSON.toJSONString(sort));
 
-        for(int i = 1; i < list.size(); i++) {
-            count ++;
-            for(int j = i; j >=1; j--) {
-                count ++;
-                int m = list.get(j);
-                int n = list.get(j-1);
-                if(m < n) {
-                    int temp = m;
-                    list.set(j, n);
-                    list.set(j-1, temp);
+    }
+
+    public static int[] sort(int[] arr) {
+
+        for(int i = 0; i < arr.length - 1; i++) {
+            for(int j = i+1; j > 0; j--) {
+                if(arr[j] < arr[j-1]) {
+                    int temp = arr[j];
+                    arr[j] = arr[j-1];
+                    arr[j-1] = temp;
                 } else {
                     break;
                 }
             }
         }
 
-        System.out.println("count is : " + count);
-        list.stream().forEach(System.out::println);
 
+        return arr;
     }
 }
