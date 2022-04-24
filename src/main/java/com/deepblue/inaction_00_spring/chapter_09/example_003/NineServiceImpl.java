@@ -1,10 +1,13 @@
 package com.deepblue.inaction_00_spring.chapter_09.example_003;
 
-import org.apache.dubbo.config.annotation.Service;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.support.GeneratedKeyHolder;
 import org.springframework.jdbc.support.KeyHolder;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.sql.PreparedStatement;
 
@@ -18,7 +21,8 @@ public class NineServiceImpl implements NineService{
     private JdbcTemplate jdbcTemplate;
 
     @Override
-    public Long saveNine() {
+//    @Transactional(isolation = Isolation.REPEATABLE_READ, propagation = Propagation.REQUIRED)
+    public Long saveNine0() {
         String sql = "insert into t_nine(name, password, age, gender) values(?, ?, ?, ?)";
 
         KeyHolder keyHolder = new GeneratedKeyHolder();
@@ -30,6 +34,8 @@ public class NineServiceImpl implements NineService{
             statement.setInt(4, 1);
             return statement;
         }, keyHolder);
+
+        int i= 1 / 0;
 
         return keyHolder.getKey().longValue();
     }

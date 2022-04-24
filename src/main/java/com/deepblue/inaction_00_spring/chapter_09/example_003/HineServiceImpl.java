@@ -1,10 +1,13 @@
 package com.deepblue.inaction_00_spring.chapter_09.example_003;
 
-import org.apache.dubbo.config.annotation.Service;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.support.GeneratedKeyHolder;
 import org.springframework.jdbc.support.KeyHolder;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.sql.PreparedStatement;
 
@@ -12,12 +15,16 @@ import java.sql.PreparedStatement;
  *
  */
 @Service
-public class MineServiceImpl implements MineService{
+public class HineServiceImpl implements HineService {
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
+    
+    @Autowired
+    private NineService nineService;
 
     @Override
+    @Transactional(isolation = Isolation.REPEATABLE_READ, propagation = Propagation.REQUIRED)
     public Long saveMine0() {
         String sql = "insert into t_mine(name, password, age, gender) values(?, ?, ?, ?)";
 
@@ -31,10 +38,18 @@ public class MineServiceImpl implements MineService{
             return statement;
         }, keyHolder);
 
-        return keyHolder.getKey().longValue();
+        Long mineId0 = keyHolder.getKey().longValue();
+        Long nineId0 = nineService.saveNine0();
+//        Long mineId1 = saveMine1();
+
+//        System.out.println("HineService saveMine0 method invoke, mineId0 = " + mineId0 + ", mineId1 = " + mineId1);
+        System.out.println("HineService saveMine0 method invoke, mineId0 = " + mineId0 + ", nineId0 = " + nineId0);
+
+        return mineId0;
     }
 
     @Override
+//    @Transactional(isolation = Isolation.REPEATABLE_READ, propagation = Propagation.REQUIRED)
     public Long saveMine1() {
         String sql = "insert into t_mine(name, password, age, gender) values(?, ?, ?, ?)";
 
@@ -48,17 +63,10 @@ public class MineServiceImpl implements MineService{
             return statement;
         }, keyHolder);
 
+        int a = 1 / 0;
+
         return keyHolder.getKey().longValue();
     }
 
-    @Override
-    public String test_same_00() {
-        Long mineId0 = saveMine0();
-        Long mineId1 = saveMine1();
-        System.out.println("mineId0 = " + mineId0 + ", mineId1 = " + mineId1);
-
-        Integer value = 1 / 0;
-        return "success";
-    }
 
 }
