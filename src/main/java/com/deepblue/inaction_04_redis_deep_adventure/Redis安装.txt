@@ -11,7 +11,7 @@ yum install make
 
 
 wget http://download.redis.io/releases/redis-5.0.0.tar.gz
-cd redis-5.0.0/src
+cd /home/redis-5.0.0/src
 make
 make test
 16772-EB89-8529-BA79-84F7 激活码
@@ -20,7 +20,7 @@ make test
 make test 的时候报错: 解决需要安装新的tcl
 wget http://downloads.sourceforge.net/tcl/tcl8.6.1-src.tar.gz
 tar –zxvf tcl8.6.1-src.tar.gz
-cd  /home/tar_package/tcl8.6.1/unix
+cd  /home/tcl8.6.1/unix
 ./configure
 make
 make install

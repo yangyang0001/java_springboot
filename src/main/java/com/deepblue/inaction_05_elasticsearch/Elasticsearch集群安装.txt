@@ -272,3 +272,24 @@
 
 
 Index 创建默认的 shards (默认 主分片个数为 5), replias (默认 每个主分片的副本个数为 1)
+
+
+安装中文分词器:
+    下载地址: https://github.com/medcl/elasticsearch-analysis-ik
+    下载对应版本的，因为安装的elasticsearch是6.5.0版本的,所以这里就要下载6.x版本的中文分词器！elasticsearch-analysis-ik-6.x.zip
+    1、下载并上传到linux上
+    2、解压并且重新用	mvn 重新编译
+        a、首先进入到指定的目录下进行编译:
+           cd /home/elasticsearch-analysis-ik/
+           mvn clean install -Dmaven.test.skip=true
+
+        b、将打包好的zip文件copy到指定的文件夹下并重新解压缩!必须创建叫ik的文件夹这是es默认的中文分词器寻找指路径
+           cd /home/elasticsearch-6.5.0/plugins/
+           mkdir ik
+           cd /home/elasticsearch-analysis-ik/target/releases
+           cp elasticsearch-analysis-ik-6.5.0.zip /home/elasticsearch-6.5.0/plugins/ik/
+
+        c、从新解压缩,并删除多余的源文件
+           cd /home/elasticsearch-6.5.0/plugins/ik/
+           unzip elasticsearch-analysis-ik-6.5.0.zip
+           rm -rf elasticsearch-analysis-ik-6.5.0.zip

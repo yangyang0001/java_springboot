@@ -5,9 +5,9 @@
 
     文档 document, 集合 collection, 数据库 database
 
-    document   相当于  MySQL 中的 行!
-    collection 相当于  MySQL 中的 表!
     database   相当于  MySQL 中的 数据库!
+    collection 相当于  MySQL 中的 表!
+    document   相当于  MySQL 中的 行!
 
 MongoDB中的各种文件: 命名空间文件 和 数据文件!
     每个数据库都有 一个.ns文件和一些数据文件! 每个数据文件都是前一个数据文件的2倍, 且每个数据文件 最大不能超过2G!
