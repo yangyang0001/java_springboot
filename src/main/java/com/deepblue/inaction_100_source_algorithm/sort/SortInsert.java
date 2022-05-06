@@ -1,28 +1,27 @@
-package com.deepblue.inaction_100_source_algorithm;
+package com.deepblue.inaction_100_source_algorithm.sort;
 
 import com.alibaba.fastjson.JSON;
 
-import java.util.ArrayList;
-
 /**
  * 插入排序, 图形参考地址: https://www.cs.usfca.edu/~galles/visualization/Algorithms.html
- *
- * 算法核心: 排完 前2个, 前3个, ... 到前n个!
  */
 public class SortInsert {
 
     public static void main(String[] args) {
-        int[] arr = {19, 2, 33, 4, 5, 100};
 
-        int[] sort = sort(arr);
-        System.out.println(JSON.toJSONString(sort));
+        int[] arr = {1, 19, 12, 20, 44, 33};
+
+        arr = sort(arr);
+
+        System.out.println(JSON.toJSONString(arr));
 
     }
 
     public static int[] sort(int[] arr) {
 
-        for(int i = 0; i < arr.length - 1; i++) {
-            for(int j = i+1; j > 0; j--) {
+        for (int i = 1; i < arr.length; i++) {
+            for (int j = i; j > 0; j--) {
+                System.out.println("i = " + i);
                 if(arr[j] < arr[j-1]) {
                     int temp = arr[j];
                     arr[j] = arr[j-1];
@@ -31,8 +30,8 @@ public class SortInsert {
                     break;
                 }
             }
+            System.out.println("--------------------");
         }
-
 
         return arr;
     }
