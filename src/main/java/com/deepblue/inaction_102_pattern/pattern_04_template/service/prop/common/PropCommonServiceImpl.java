@@ -1,29 +1,32 @@
-package com.deepblue.inaction_102_pattern.pattern_04_template.prop.common;
+package com.deepblue.inaction_102_pattern.pattern_04_template.service.prop.common;
 
-import com.deepblue.inaction_102_pattern.pattern_04_template.common.PropGameServiceImpl;
-import com.deepblue.inaction_102_pattern.pattern_04_template.prop.dto.common.*;
+import com.deepblue.inaction_102_pattern.pattern_04_template.dto.prop.common.*;
+import com.deepblue.inaction_102_pattern.pattern_04_template.service.common.PropGameServiceImpl;
 
 /**
  *
  */
 public abstract class PropCommonServiceImpl extends PropGameServiceImpl implements PropCommonService {
 
+
     @Override
-    public PropInitResult initProp(PropInitParam propInitParam) {
+    public PropInitResult propInit(PropInitParam propInitParam) {
         return doInit(propInitParam);
     }
 
     @Override
-    public PropBeginResult beginProp(PropBeginParam propBeginParam) {
+    public PropBeginResult propBegin(PropBeginParam propBeginParam) {
         return doBegin(propBeginParam);
     }
 
     @Override
-    public PropEndResult endProp(PropEndParam propEndParam) {
+    public PropEndResult propEnd(PropEndParam propEndParam) {
         return doEnd(propEndParam);
     }
 
     public abstract PropInitResult doInit(PropInitParam propInitParam);
+
     public abstract PropBeginResult doBegin(PropBeginParam propBeginParam);
+
     public abstract PropEndResult doEnd(PropEndParam propEndParam);
 }
