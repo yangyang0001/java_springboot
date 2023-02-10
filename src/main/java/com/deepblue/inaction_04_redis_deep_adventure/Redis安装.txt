@@ -68,6 +68,12 @@ yum install libtermcap-devel ncurses-devel libevent-devel readline-devel
 编译：make liunx
 安装: make install
 
+----------------------------------------------------------------
+安装 过程之中要注意 redis.conf 文件中的几处修改:
+# bind 127.0.0.1
+protected-mode no
+daemonize yes
+
 -------------------------------------------------------------- RedisBloom 组件安装 -----------------------------------------------------
 0、Redis 必须是4.0版本以后才支持 redisbloom 组件!
 
