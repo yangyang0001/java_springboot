@@ -1,6 +1,10 @@
 package com.deepblue.inaction_102_pattern.pattern_01_factory;
 
-public interface AbstractFactory {
+/**
+ *
+ */
+public abstract class AbstractFactory {
 
-    public AbstractProduct create();
+    public abstract AbstractProduct create();
+
 }

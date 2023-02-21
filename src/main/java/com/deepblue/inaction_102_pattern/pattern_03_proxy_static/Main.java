@@ -10,11 +10,11 @@ public class Main {
     public static void main(String[] args) {
 
         Enhancer enhancer = new Enhancer();
-        enhancer.setSuperclass(RealSubejct.class);
-        enhancer.setCallback(new CommonMethodInterceptor());
-        RealSubejct subject = (RealSubejct) enhancer.create();
+        enhancer.setSuperclass(Subject.class);
+        enhancer.setCallback(new CommonMethodInterceptor(new RealSubject()));
 
-        System.out.println(subject.sayHello("PatternHandler"));
+        Subject subject = (Subject) enhancer.create();
+        System.out.println(subject.sayHello("zhangsan123"));
 
     }
 }

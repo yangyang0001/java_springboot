@@ -5,9 +5,17 @@ import lombok.*;
 /**
  *
  */
-@ToString
 @Data
 @AllArgsConstructor
-public class ConcreteProductA extends AbstractProduct{
+@NoArgsConstructor
+@Builder
+@ToString
+public class ConcreteProductA extends AbstractProduct {
+
+    private Long id;
+
+    private String username;
+
+    private String password;
 
 }
