@@ -10,12 +10,12 @@ public class FirstDecorator extends MineDecorator {
 
     @Override
     public void execute() {
-        ComponentHandler component = this.getComponent();
+        Component component = this.getComponent();
         this.firstDecorate(component);
         component.execute();
     }
 
-    public void firstDecorate(ComponentHandler component) {
+    public void firstDecorate(Component component) {
         MineComponent mine = (MineComponent) component;
         mine.setId(100L);
         mine.setUsername("zhangsan");

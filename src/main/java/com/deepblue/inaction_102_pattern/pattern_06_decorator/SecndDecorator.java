@@ -10,12 +10,12 @@ public class SecndDecorator extends MineDecorator{
 
     @Override
     public void execute() {
-        ComponentHandler component = this.getComponent();
+        Component component = this.getComponent();
         this.secndDecorate(component);
         component.execute();
     }
 
-    public void secndDecorate(ComponentHandler component) {
+    public void secndDecorate(Component component) {
         MineComponent mine = (MineComponent) component;
         mine.setCard("371523201001066253");
         mine.setMobile("18765829090");

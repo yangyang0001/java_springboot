@@ -11,7 +11,7 @@ import lombok.*;
 @NoArgsConstructor
 @Builder
 @ToString
-public class MineComponent implements ComponentHandler {
+public class MineComponent implements Component {
 
     // --------------------------------------- FirstDecorator Execute Begin ---------------------------------------
     private Long id;

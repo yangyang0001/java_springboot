@@ -6,9 +6,9 @@ import lombok.*;
  *
  */
 @Data
-public abstract class MineDecorator implements ComponentHandler {
+public abstract class MineDecorator implements Component {
 
-    protected ComponentHandler component;
+    protected Component component;
 
     public abstract void execute();
 
