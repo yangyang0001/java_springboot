@@ -29,6 +29,6 @@ public class MineComponent implements Component {
 
     @Override
     public void execute() {
-        System.out.println("MineComponent execute method invoke, the object json is :" + JSON.toJSONString(this));
+        System.out.println("MineComponent execute method invoke, the component json is :" + JSON.toJSONString(this));
     }
 }

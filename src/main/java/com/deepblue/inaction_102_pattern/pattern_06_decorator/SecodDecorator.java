@@ -6,7 +6,7 @@ import lombok.*;
  *
  */
 @Data
-public class SecndDecorator extends MineDecorator{
+public class SecodDecorator extends MineDecorator{
 
     @Override
     public void execute() {

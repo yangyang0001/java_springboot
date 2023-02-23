@@ -10,7 +10,7 @@ public class Main {
         MineComponent component = new MineComponent();
 
         FirstDecorator decorator1 = new FirstDecorator();
-        SecndDecorator decorator2 = new SecndDecorator();
+        SecodDecorator decorator2 = new SecodDecorator();
 
         decorator1.setComponent(component);
         decorator2.setComponent(component);
