@@ -89,9 +89,16 @@ public class TestObject {
 //        System.out.println(c0.compareTo("0") >= 0 && c0.compareTo("9") <=0);
 //        System.out.println(c1.compareTo("0") >= 0 && c1.compareTo("9") <=0);
 
-        String a = "0100";
+//        String a = "0100";
+//
+//        System.out.println(Long.valueOf(a, 2));
 
-        System.out.println(Long.valueOf(a, 2));
+
+        StringBuffer buffer = new StringBuffer("");
+        buffer.append("abc").append("def");
+
+        System.out.println(buffer.toString());
+        System.out.println(buffer.reverse().toString());
 
 
 

@@ -16,7 +16,7 @@ public class StudentStream {
         Student student2 = new Student("lisi", 90);
         Student student3 = new Student("wangwu", 100);
         Student student4 = new Student("zhaoliu", 80);
-        Student student5 = new Student("zhaoliu", 90);
+        Student student5 = new Student("zhaoliu", 70);
 
         List<Student> students = Arrays.asList(student1, student2, student3, student4, student5);
 
