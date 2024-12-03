@@ -135,7 +135,7 @@
 
     添加如下配置:
         oracle.install.option=INSTALL_DB_AND_CONFIG
-        ORACLE_HOSTNAME=192.168.188.50 #实际上可以修改成你自己的主机名或者域名(IP)
+        ORACLE_HOSTNAME=192.168.188.51 #实际上可以修改成你自己的主机名或者域名(IP)
         UNIX_GROUP_NAME=oinstall
         INVENTORY_LOCATION=/home/oracle/tools/oraInventory
         SELECTED_LANGUAGES=en,zh_CN
