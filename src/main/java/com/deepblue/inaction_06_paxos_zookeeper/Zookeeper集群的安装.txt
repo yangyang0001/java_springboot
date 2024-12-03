@@ -8,6 +8,9 @@
 2、安装zookeeper集群:
     下载地址: wget https://archive.apache.org/dist/zookeeper/zookeeper-3.4.3/zookeeper-3.4.3.tar.gz
 
+    export ZK_HOME=/home/zookeeper-3.4.10
+    export PATH=$PATH:$ZK_HOME/bin
+
     安装步骤: 省略, 参考之前安装过的, zookeeper集群安装 也不是一次了!
 
     注意部分: zoo.cfg 的配置, 同时在 dataDir=/tmp/zookeeper 下创建 myid 对应 zoo.cfg 中的 server.id
