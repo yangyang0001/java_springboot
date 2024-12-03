@@ -23,7 +23,7 @@ MacOS 上安装 MySQL
 
     4、MySQL服务的停/启服务 命令
         停止MySQL服务
-        mysql.server stop
+        mysql.server stop/start
 
         重启MySQL服务
         mysql.server restart
