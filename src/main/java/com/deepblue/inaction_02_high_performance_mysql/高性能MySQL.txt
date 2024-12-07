@@ -61,6 +61,66 @@ MySQL 提供了两种锁的粒度: 表锁 和 行锁!
 
     TODO 经过验证, 窗口2发生: 1213 - Deadlock found when trying to get lock; try restarting transaction, Time: 0.002000s
 
+死锁测试过程:
+    首先: 打开两个 shell 端, 通过命令 mysql -uroot -p 进入 mysql!
+
+    第一步:
+        窗口A:
+            mysql> use mysql_transaction;
+                    Database changed
+
+            mysql> begin;
+            Query OK, 0 rows affected (0.00 sec)
+
+            mysql> update student set student_name = 'zhangsan_lock_A' where id = 1;
+            Query OK, 1 row affected (0.00 sec)
+            Rows matched: 1  Changed: 1  Warnings: 0
+
+
+        窗口B:
+            mysql> use mysql_transaction;
+                    Database changed
+
+            mysql> begin;
+            Query OK, 0 rows affected (0.00 sec)
+
+            mysql> update student set student_name = 'xiaoming_lock_B' where id = 3;
+            Query OK, 1 row affected (0.00 sec)
+            Rows matched: 1  Changed: 1  Warnings: 0
+
+    第二步:
+        窗口A:
+            mysql> update student set student_name = 'xiaoming_lock_A' where id = 3; 按下回车进行等待!
+
+
+        窗口B:
+            mysql> update student set student_name = 'zhangsan_lock_B' where id = 1; 按下回车出现如下问题:
+            ERROR 1213 (40001): Deadlock found when trying to get lock; try restarting transaction
+
+
+死锁解决方案:
+    mysql innodb 中有如下的 两个参数: innodb_lock_wait_timeout, innodb_deadlock_detect 都默认开启了! 就可以自动解决死锁问题了!
+
+        mysql> use mysql_transaction;
+        Database changed
+        mysql> show variables like 'innodb_lock_wait_timeout';
+        +--------------------------+-------+
+        | Variable_name            | Value |
+        +--------------------------+-------+
+        | innodb_lock_wait_timeout | 50    |
+        +--------------------------+-------+
+        1 row in set (0.00 sec)
+
+        mysql> show variables like 'innodb_deadlock_detect';
+        +------------------------+-------+
+        | Variable_name          | Value |
+        +------------------------+-------+
+        | innodb_deadlock_detect | ON    |
+        +------------------------+-------+
+        1 row in set (0.00 sec)
+
+
+
 事务日志:
     日志目的: 提高事务的执行效率
     执行方式: 内存提交事务 ---> 写入磁盘事务日志 ---> 执行磁盘事务日志 ---> 将数据写入到磁盘文件中
