@@ -94,11 +94,22 @@ public class TestObject {
 //        System.out.println(Long.valueOf(a, 2));
 
 
-        StringBuffer buffer = new StringBuffer("");
-        buffer.append("abc").append("def");
+//        StringBuffer buffer = new StringBuffer("");
+//        buffer.append("abc").append("def");
+//
+//        System.out.println(buffer.toString());
+//        System.out.println(buffer.reverse().toString());
 
-        System.out.println(buffer.toString());
-        System.out.println(buffer.reverse().toString());
+        Calendar calendar = Calendar.getInstance();
+        calendar.setTime(new Date());
+        calendar.set(Calendar.HOUR_OF_DAY, 0);
+        calendar.set(Calendar.MINUTE, 0);
+        calendar.set(Calendar.SECOND, 0);
+        calendar.set(Calendar.MILLISECOND, 0);
+        Date zero = calendar.getTime();
+
+        SimpleDateFormat defaultSDF = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss:SSS");
+        System.out.println("time = " + defaultSDF.format(zero) + ", time = " + zero.getTime());
 
 
 
