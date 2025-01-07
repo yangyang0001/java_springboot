@@ -1,0 +1,277 @@
+-------------------------------------------------------------------- 复制集 搭建 --------------------------------------------------------
+
+
+一台主机, 一共有3个节点, 搭建复制集过程:
+
+1、创建节点相关的文件夹
+    cd /home/mongodb-linux-x86_64-rhel70-5.0.5/data
+
+    mkdir -p node1/db
+    mkdir -p node2/db
+    mkdir -p node3/db
+
+    mkdir -p node1/logs
+    mkdir -p node2/logs
+    mkdir -p node3/logs
+
+    // 统一写入一样的key
+    mkdir key
+    echo "this is mongodb replica set key" > key/node1
+    echo "this is mongodb replica set key" > key/node2
+    echo "this is mongodb replica set key" > key/node3
+
+    // TODO 这块设置 keyFile 权限一定不能超过600, 否则报错!
+    cd key
+    chmod 600 *
+
+2、修改配置文件, 参考如下文件
+    mongodb_node1.conf
+    mongodb_node2.conf
+    mongodb_node3.conf
+
+3、启动所有节点
+    cd /home/mongodb-linux-x86_64-rhel70-5.0.5/bin
+
+    mongod -f ../data/node1/mongodb_node1.cnf
+    mongod -f ../data/node2/mongodb_node2.cnf
+    mongod -f ../data/node3/mongodb_node3.cnf
+
+
+4、初始化ReplicaSet环境
+    初始化失败后, 调试:
+    rm -rf /home/mongodb-linux-x86_64-rhel70-5.0.5/data/node1/db/*
+    rm -rf /home/mongodb-linux-x86_64-rhel70-5.0.5/data/node2/db/*
+    rm -rf /home/mongodb-linux-x86_64-rhel70-5.0.5/data/node3/db/*
+
+    rm -rf /home/mongodb-linux-x86_64-rhel70-5.0.5/data/node1/logs/*
+    rm -rf /home/mongodb-linux-x86_64-rhel70-5.0.5/data/node2/logs/*
+    rm -rf /home/mongodb-linux-x86_64-rhel70-5.0.5/data/node3/logs/*
+
+    vim /home/mongodb-linux-x86_64-rhel70-5.0.5/data/node1/mongodb_node1.cnf
+    vim /home/mongodb-linux-x86_64-rhel70-5.0.5/data/node2/mongodb_node2.cnf
+    vim /home/mongodb-linux-x86_64-rhel70-5.0.5/data/node3/mongodb_node3.cnf
+
+    cat /home/mongodb-linux-x86_64-rhel70-5.0.5/data/node1/mongodb_node1.cnf
+    cat /home/mongodb-linux-x86_64-rhel70-5.0.5/data/node2/mongodb_node2.cnf
+    cat /home/mongodb-linux-x86_64-rhel70-5.0.5/data/node3/mongodb_node3.cnf
+
+    连接客户端:
+    cd /home/mongodb-linux-x86_64-rhel70-5.0.5/bin
+
+    mongo --port 27017
+
+    config_replica = {_id : "mine-repica-set", members: [{_id : 0, host: '127.0.0.1:27017'},{_id : 1, host: '127.0.0.1:27018'},{_id : 2, host: '127.0.0.1:27019'}]}
+    rs.initiate(config_replica)
+
+    // 查看replica set 的状态信息:
+    rs.status()
+    {
+            "set" : "mine-repica-set",
+            "date" : ISODate("2022-02-16T15:45:26.830Z"),
+            "myState" : 1,
+            "term" : NumberLong(1),
+            "syncSourceHost" : "",
+            "syncSourceId" : -1,
+            "heartbeatIntervalMillis" : NumberLong(2000),
+            "majorityVoteCount" : 2,
+            "writeMajorityCount" : 2,
+            "votingMembersCount" : 3,
+            "writableVotingMembersCount" : 3,
+            "optimes" : {
+                    "lastCommittedOpTime" : {
+                            "ts" : Timestamp(1645026323, 1),
+                            "t" : NumberLong(1)
+                    },
+                    "lastCommittedWallTime" : ISODate("2022-02-16T15:45:23.921Z"),
+                    "readConcernMajorityOpTime" : {
+                            "ts" : Timestamp(1645026323, 1),
+                            "t" : NumberLong(1)
+                    },
+                    "appliedOpTime" : {
+                            "ts" : Timestamp(1645026323, 1),
+                            "t" : NumberLong(1)
+                    },
+                    "durableOpTime" : {
+                            "ts" : Timestamp(1645026323, 1),
+                            "t" : NumberLong(1)
+                    },
+                    "lastAppliedWallTime" : ISODate("2022-02-16T15:45:23.921Z"),
+                    "lastDurableWallTime" : ISODate("2022-02-16T15:45:23.921Z")
+            },
+            "lastStableRecoveryTimestamp" : Timestamp(1645026273, 1),
+            "electionCandidateMetrics" : {
+                    "lastElectionReason" : "electionTimeout",
+                    "lastElectionDate" : ISODate("2022-02-16T15:30:53.769Z"),
+                    "electionTerm" : NumberLong(1),
+                    "lastCommittedOpTimeAtElection" : {
+                            "ts" : Timestamp(1645025442, 1),
+                            "t" : NumberLong(-1)
+                    },
+                    "lastSeenOpTimeAtElection" : {
+                            "ts" : Timestamp(1645025442, 1),
+                            "t" : NumberLong(-1)
+                    },
+                    "numVotesNeeded" : 2,
+                    "priorityAtElection" : 1,
+                    "electionTimeoutMillis" : NumberLong(10000),
+                    "numCatchUpOps" : NumberLong(0),
+                    "newTermStartDate" : ISODate("2022-02-16T15:30:53.790Z"),
+                    "wMajorityWriteAvailabilityDate" : ISODate("2022-02-16T15:30:53.971Z")
+            },
+            "members" : [
+                    {
+                            "_id" : 0,
+                            "name" : "127.0.0.1:27017",
+                            "health" : 1,
+                            "state" : 1,
+                            "stateStr" : "PRIMARY",
+                            "uptime" : 936,
+                            "optime" : {
+                                    "ts" : Timestamp(1645026323, 1),
+                                    "t" : NumberLong(1)
+                            },
+                            "optimeDate" : ISODate("2022-02-16T15:45:23Z"),
+                            "lastAppliedWallTime" : ISODate("2022-02-16T15:45:23.921Z"),
+                            "lastDurableWallTime" : ISODate("2022-02-16T15:45:23.921Z"),
+                            "syncSourceHost" : "",
+                            "syncSourceId" : -1,
+                            "infoMessage" : "",
+                            "electionTime" : Timestamp(1645025453, 1),
+                            "electionDate" : ISODate("2022-02-16T15:30:53Z"),
+                            "configVersion" : 1,
+                            "configTerm" : 1,
+                            "self" : true,
+                            "lastHeartbeatMessage" : ""
+                    },
+                    {
+                            "_id" : 1,
+                            "name" : "127.0.0.1:27018",
+                            "health" : 1,
+                            "state" : 2,
+                            "stateStr" : "SECONDARY",
+                            "uptime" : 884,
+                            "optime" : {
+                                    "ts" : Timestamp(1645026323, 1),
+                                    "t" : NumberLong(1)
+                            },
+                            "optimeDurable" : {
+                                    "ts" : Timestamp(1645026323, 1),
+                                    "t" : NumberLong(1)
+                            },
+                            "optimeDate" : ISODate("2022-02-16T15:45:23Z"),
+                            "optimeDurableDate" : ISODate("2022-02-16T15:45:23Z"),
+                            "lastAppliedWallTime" : ISODate("2022-02-16T15:45:23.921Z"),
+                            "lastDurableWallTime" : ISODate("2022-02-16T15:45:23.921Z"),
+                            "lastHeartbeat" : ISODate("2022-02-16T15:45:26.207Z"),
+                            "lastHeartbeatRecv" : ISODate("2022-02-16T15:45:25.785Z"),
+                            "pingMs" : NumberLong(0),
+                            "lastHeartbeatMessage" : "",
+                            "syncSourceHost" : "127.0.0.1:27019",
+                            "syncSourceId" : 2,
+                            "infoMessage" : "",
+                            "configVersion" : 1,
+                            "configTerm" : 1
+                    },
+                    {
+                            "_id" : 2,
+                            "name" : "127.0.0.1:27019",
+                            "health" : 1,
+                            "state" : 2,
+                            "stateStr" : "SECONDARY",
+                            "uptime" : 884,
+                            "optime" : {
+                                    "ts" : Timestamp(1645026323, 1),
+                                    "t" : NumberLong(1)
+                            },
+                            "optimeDurable" : {
+                                    "ts" : Timestamp(1645026323, 1),
+                                    "t" : NumberLong(1)
+                            },
+                            "optimeDate" : ISODate("2022-02-16T15:45:23Z"),
+                            "optimeDurableDate" : ISODate("2022-02-16T15:45:23Z"),
+                            "lastAppliedWallTime" : ISODate("2022-02-16T15:45:23.921Z"),
+                            "lastDurableWallTime" : ISODate("2022-02-16T15:45:23.921Z"),
+                            "lastHeartbeat" : ISODate("2022-02-16T15:45:26.207Z"),
+                            "lastHeartbeatRecv" : ISODate("2022-02-16T15:45:26.787Z"),
+                            "pingMs" : NumberLong(0),
+                            "lastHeartbeatMessage" : "",
+                            "syncSourceHost" : "127.0.0.1:27017",
+                            "syncSourceId" : 0,
+                            "infoMessage" : "",
+                            "configVersion" : 1,
+                            "configTerm" : 1
+                    }
+            ],
+            "ok" : 1,
+            "$clusterTime" : {
+                    "clusterTime" : Timestamp(1645026323, 1),
+                    "signature" : {
+                            "hash" : BinData(0,"vTZJBMxNDf1okvOl2NA9ZdJIP78="),
+                            "keyId" : NumberLong("7065330521722585093")
+                    }
+            },
+            "operationTime" : Timestamp(1645026323, 1)
+    }
+
+    // 查看当前节点是否是 master 节点:
+    rs.isMaster()
+    {
+            "topologyVersion" : {
+                    "processId" : ObjectId("620d186f1e074bc4e28785db"),
+                    "counter" : NumberLong(5)
+            },
+            "hosts" : [
+                    "127.0.0.1:27017",
+                    "127.0.0.1:27018",
+                    "127.0.0.1:27019"
+            ],
+            "setName" : "mine-repica-set",
+            "setVersion" : 1,
+            "ismaster" : false,
+            "secondary" : true,
+            "primary" : "127.0.0.1:27019",
+            "me" : "127.0.0.1:27018",
+            "lastWrite" : {
+                    "opTime" : {
+                            "ts" : Timestamp(1645028396, 1),
+                            "t" : NumberLong(2)
+                    },
+                    "lastWriteDate" : ISODate("2022-02-16T16:19:56Z"),
+                    "majorityOpTime" : {
+                            "ts" : Timestamp(1645028396, 1),
+                            "t" : NumberLong(2)
+                    },
+                    "majorityWriteDate" : ISODate("2022-02-16T16:19:56Z")
+            },
+            "maxBsonObjectSize" : 16777216,
+            "maxMessageSizeBytes" : 48000000,
+            "maxWriteBatchSize" : 100000,
+            "localTime" : ISODate("2022-02-16T16:19:56.600Z"),
+            "logicalSessionTimeoutMinutes" : 30,
+            "connectionId" : 31,
+            "minWireVersion" : 0,
+            "maxWireVersion" : 13,
+            "readOnly" : false,
+            "ok" : 1,
+            "$clusterTime" : {
+                    "clusterTime" : Timestamp(1645028396, 1),
+                    "signature" : {
+                            "hash" : BinData(0,"DHmLH1u6vqMKzvV8+MyYULMbapg="),
+                            "keyId" : NumberLong("7065330521722585093")
+                    }
+            },
+            "operationTime" : Timestamp(1645028396, 1)
+    }
+
+
+添加节点: rs.add("127.0.0.1:27020")
+
+删除节点: rs.remove("127.0.0.1:27020")
+
+
+
+
+
+
+
+

@@ -1,0 +1,121 @@
+# ======================== Elasticsearch Configuration =========================
+#
+# NOTE: Elasticsearch comes with reasonable defaults for most settings.
+#       Before you set out to tweak and tune the configuration, make sure you
+#       understand what are you trying to accomplish and the consequences.
+#
+# The primary way of configuring a node is via this file. This template lists
+# the most important settings you may want to configure for a production cluster.
+#
+# Please see the documentation for further information on configuration options:
+# <http://www.elastic.co/guide/en/elasticsearch/reference/current/setup-configuration.html>
+#
+# ---------------------------------- Cluster -----------------------------------
+#
+# Use a descriptive name for your cluster:
+
+#################################### elastic-cluster 第1处修改 集群名称 ####################################
+cluster.name: my-elasticsearch-cluster
+
+#
+# ------------------------------------ Node ------------------------------------
+#
+# Use a descriptive name for the node:
+
+#################################### elastic-cluster 第2处修改 节点名称 ####################################
+node.name: node-3
+
+#
+# Add custom attributes to the node:
+
+#################################### elastic-cluster 第3处修改 节点描述 ####################################
+node.attr.rack: r3
+
+#
+# ----------------------------------- Paths ------------------------------------
+#
+# Path to directory where to store the data (separate multiple locations by comma):
+
+#################################### elastic-cluster 第4处修改 索引存储位置 ####################################
+path.data: /home/elasticsearch-5.0.0/data
+
+#
+# Path to log files:
+
+#################################### elastic-cluster 第5处修改 日志存储位置 ####################################
+path.logs: /home/elasticsearch-5.0.0/logs
+
+#
+# ----------------------------------- Memory -----------------------------------
+#
+# Lock the memory on startup:
+
+#################################### elastic-cluster 第6处修改 内存分配模式 ####################################
+bootstrap.memory_lock: true
+
+#
+# Make sure that the heap size is set to about half the memory available
+# on the system and that the owner of the process is allowed to use this
+# limit.
+#
+# Elasticsearch performs poorly when the system is swapping the memory.
+#
+# ---------------------------------- Network -----------------------------------
+#
+# Set the bind address to a specific IP (IPv4 or IPv6):
+
+#################################### elastic-cluster 第7处修改 绑定网卡IP ####################################
+network.host: 192.168.188.14
+
+#
+# Set a custom port for HTTP:
+
+#################################### elastic-cluster 第8处修改 http协议端口号 #################################
+http.port: 9200
+
+#
+# For more information, see the documentation at:
+# <http://www.elastic.co/guide/en/elasticsearch/reference/current/modules-network.html>
+#
+# --------------------------------- Discovery ----------------------------------
+#
+# Pass an initial list of hosts to perform discovery when new node is started:
+# The default list of hosts is ["127.0.0.1", "[::1]"]
+
+#################################### elastic-cluster 第9处修改 所有节点IP地址 #################################
+discovery.zen.ping.unicast.hosts: ["192.168.188.12", "192.168.188.13", "192.168.188.14"]
+
+# Prevent the "split brain" by configuring the majority of nodes (total number of nodes / 2 + 1):
+
+####################### elastic-cluster 第10处修改 推选出一个master节点最少需要多少个nodes #######################
+discovery.zen.minimum_master_nodes: 2
+
+#
+# For more information, see the documentation at:
+# <http://www.elastic.co/guide/en/elasticsearch/reference/current/modules-discovery.html>
+#
+# ---------------------------------- Gateway -----------------------------------
+
+######################### elastic-cluster 第11处修改 当重启集群后, 最少启动多少个节点后开始恢复 ####################
+gateway.recover_after_nodes: 3
+
+#
+# For more information, see the documentation at:
+# <http://www.elastic.co/guide/en/elasticsearch/reference/current/modules-gateway.html>
+#
+# ---------------------------------- Various -----------------------------------
+#
+# Disable starting multiple nodes on a single system:
+
+################################# elastic-cluster 第12处修改 在一台机器上最多启动的节点数 #########################
+node.max_local_storage_nodes: 1
+
+#
+# Require explicit names when deleting indices:
+
+####################### elastic-cluster 第13处修改 当删除一个索引的时候, 是否需要指明索引的名称 ###################
+action.destructive_requires_name: true
+
+####################################### elastic-cluster 第14处修改 允许跨域访问 ###################################
+http.cors.enabled: true
+http.cors.allow-origin: "*"

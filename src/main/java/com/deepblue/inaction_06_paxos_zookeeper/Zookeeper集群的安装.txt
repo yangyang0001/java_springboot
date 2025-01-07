@@ -1,0 +1,127 @@
+-------------------------------------------------------------------- 集群搭建 --------------------------------------------------------
+0、机器环境
+    4台Linux服务器
+
+1、安装jdk环境
+    jdk-8u311-linux-x64.tar.gz
+
+2、安装zookeeper集群:
+    下载地址: wget https://archive.apache.org/dist/zookeeper/zookeeper-3.4.3/zookeeper-3.4.3.tar.gz
+
+    export ZK_HOME=/home/zookeeper-3.4.10
+    export PATH=$PATH:$ZK_HOME/bin
+
+    安装步骤: 省略, 参考之前安装过的, zookeeper集群安装 也不是一次了!
+
+    注意部分: zoo.cfg 的配置, 同时在 dataDir=/tmp/zookeeper 下创建 myid 对应 zoo.cfg 中的 server.id
+
+3、启动服务端
+    [root@localhost ~]# sh zkServer.sh start
+    JMX enabled by default
+    Using config: /home/zookeeper-3.4.3/bin/../conf/zoo.cfg
+    Starting zookeeper ... STARTED
+
+4、连接客户端
+    格式: sh zkCli.sh -server  ip:port
+
+    默认连接 localhost:2181 的客户端:
+        [root@localhost ~]# sh zkCli.sh
+        Connecting to localhost:2181
+        2022-02-22 16:07:05,343 [myid:] - INFO  [main:Environment@98] - Client environment:zookeeper.version=3.4.3-1240972, built on 02/06/2012 10:48 GMT
+        2022-02-22 16:07:05,349 [myid:] - INFO  [main:Environment@98] - Client environment:host.name=localhost
+        2022-02-22 16:07:05,349 [myid:] - INFO  [main:Environment@98] - Client environment:java.version=1.8.0_321
+        2022-02-22 16:07:05,349 [myid:] - INFO  [main:Environment@98] - Client environment:java.vendor=Oracle Corporation
+        2022-02-22 16:07:05,349 [myid:] - INFO  [main:Environment@98] - Client environment:java.home=/home/jdk1.8.0_321/jre
+        2022-02-22 16:07:05,349 [myid:] - INFO  [main:Environment@98] - Client environment:java.class.path=/home/zookeeper-3.4.3/bin/../build/classes:/home/zookeeper-3.4.3/bin/../build/lib/*.jar:/home/zookeeper-3.4.3/bin/../lib/slf4j-log4j12-1.6.1.jar:/home/zookeeper-3.4.3/bin/../lib/slf4j-api-1.6.1.jar:/home/zookeeper-3.4.3/bin/../lib/netty-3.2.2.Final.jar:/home/zookeeper-3.4.3/bin/../lib/log4j-1.2.15.jar:/home/zookeeper-3.4.3/bin/../lib/jline-0.9.94.jar:/home/zookeeper-3.4.3/bin/../zookeeper-3.4.3.jar:/home/zookeeper-3.4.3/bin/../src/java/lib/*.jar:/home/zookeeper-3.4.3/bin/../conf:/home/jdk1.8.0_321/jre/lib/rt.jar:/home/jdk1.8.0_321/jre/lib/ext
+        2022-02-22 16:07:05,349 [myid:] - INFO  [main:Environment@98] - Client environment:java.library.path=/usr/java/packages/lib/amd64:/usr/lib64:/lib64:/lib:/usr/lib
+        2022-02-22 16:07:05,350 [myid:] - INFO  [main:Environment@98] - Client environment:java.io.tmpdir=/tmp
+        2022-02-22 16:07:05,350 [myid:] - INFO  [main:Environment@98] - Client environment:java.compiler=<NA>
+        2022-02-22 16:07:05,350 [myid:] - INFO  [main:Environment@98] - Client environment:os.name=Linux
+        2022-02-22 16:07:05,350 [myid:] - INFO  [main:Environment@98] - Client environment:os.arch=amd64
+        2022-02-22 16:07:05,350 [myid:] - INFO  [main:Environment@98] - Client environment:os.version=3.10.0-1127.el7.x86_64
+        2022-02-22 16:07:05,350 [myid:] - INFO  [main:Environment@98] - Client environment:user.name=root
+        2022-02-22 16:07:05,350 [myid:] - INFO  [main:Environment@98] - Client environment:user.home=/root
+        2022-02-22 16:07:05,351 [myid:] - INFO  [main:Environment@98] - Client environment:user.dir=/root
+        2022-02-22 16:07:05,352 [myid:] - INFO  [main:ZooKeeper@433] - Initiating client connection, connectString=localhost:2181 sessionTimeout=30000 watcher=org.apache.zookeeper.ZooKeeperMain$MyWatcher@27fa135a
+        2022-02-22 16:07:05,385 [myid:] - INFO  [main-SendThread():ClientCnxn$SendThread@933] - Opening socket connection to server /0:0:0:0:0:0:0:1:2181
+        Welcome to ZooKeeper!
+        2022-02-22 16:07:05,392 [myid:] - INFO  [main-SendThread(localhost:2181):ZooKeeperSaslClient@125] - Client will not SASL-authenticate because the default JAAS configuration section 'Client' could not be found. If you are not using SASL, you may ignore this. On the other hand, if you expected SASL to work, please fix your JAAS configuration.
+        JLine support is enabled
+        2022-02-22 16:07:05,407 [myid:] - INFO  [main-SendThread(localhost:2181):ClientCnxn$SendThread@846] - Socket connection established to localhost/0:0:0:0:0:0:0:1:2181, initiating session
+        2022-02-22 16:07:05,444 [myid:] - INFO  [main-SendThread(localhost:2181):ClientCnxn$SendThread@1175] - Session establishment complete on server localhost/0:0:0:0:0:0:0:1:2181, sessionid = 0x17f2077aa2c0000, negotiated timeout = 30000
+
+        WATCHER::
+
+        WatchedEvent state:SyncConnected type:None path:null
+        [zk: localhost:2181(CONNECTED) 0]
+
+    连接 192.168.188.16:2181 的客户端:
+        [root@localhost ~]# sh zkCli.sh -server 192.168.188.16:2181
+        Connecting to 192.168.188.16:2181
+        2022-02-22 16:13:50,896 [myid:] - INFO  [main:Environment@98] - Client environment:zookeeper.version=3.4.3-1240972, built on 02/06/2012 10:48 GMT
+        2022-02-22 16:13:50,902 [myid:] - INFO  [main:Environment@98] - Client environment:host.name=localhost
+        2022-02-22 16:13:50,902 [myid:] - INFO  [main:Environment@98] - Client environment:java.version=1.8.0_321
+        2022-02-22 16:13:50,902 [myid:] - INFO  [main:Environment@98] - Client environment:java.vendor=Oracle Corporation
+        2022-02-22 16:13:50,902 [myid:] - INFO  [main:Environment@98] - Client environment:java.home=/home/jdk1.8.0_321/jre
+        2022-02-22 16:13:50,902 [myid:] - INFO  [main:Environment@98] - Client environment:java.class.path=/home/zookeeper-3.4.3/bin/../build/classes:/home/zookeeper-3.4.3/bin/../build/lib/*.jar:/home/zookeeper-3.4.3/bin/../lib/slf4j-log4j12-1.6.1.jar:/home/zookeeper-3.4.3/bin/../lib/slf4j-api-1.6.1.jar:/home/zookeeper-3.4.3/bin/../lib/netty-3.2.2.Final.jar:/home/zookeeper-3.4.3/bin/../lib/log4j-1.2.15.jar:/home/zookeeper-3.4.3/bin/../lib/jline-0.9.94.jar:/home/zookeeper-3.4.3/bin/../zookeeper-3.4.3.jar:/home/zookeeper-3.4.3/bin/../src/java/lib/*.jar:/home/zookeeper-3.4.3/bin/../conf:/home/jdk1.8.0_321/jre/lib/rt.jar:/home/jdk1.8.0_321/jre/lib/ext
+        2022-02-22 16:13:50,903 [myid:] - INFO  [main:Environment@98] - Client environment:java.library.path=/usr/java/packages/lib/amd64:/usr/lib64:/lib64:/lib:/usr/lib
+        2022-02-22 16:13:50,903 [myid:] - INFO  [main:Environment@98] - Client environment:java.io.tmpdir=/tmp
+        2022-02-22 16:13:50,903 [myid:] - INFO  [main:Environment@98] - Client environment:java.compiler=<NA>
+        2022-02-22 16:13:50,903 [myid:] - INFO  [main:Environment@98] - Client environment:os.name=Linux
+        2022-02-22 16:13:50,903 [myid:] - INFO  [main:Environment@98] - Client environment:os.arch=amd64
+        2022-02-22 16:13:50,903 [myid:] - INFO  [main:Environment@98] - Client environment:os.version=3.10.0-1127.el7.x86_64
+        2022-02-22 16:13:50,904 [myid:] - INFO  [main:Environment@98] - Client environment:user.name=root
+        2022-02-22 16:13:50,904 [myid:] - INFO  [main:Environment@98] - Client environment:user.home=/root
+        2022-02-22 16:13:50,904 [myid:] - INFO  [main:Environment@98] - Client environment:user.dir=/root
+        2022-02-22 16:13:50,906 [myid:] - INFO  [main:ZooKeeper@433] - Initiating client connection, connectString=192.168.188.16:2181 sessionTimeout=30000 watcher=org.apache.zookeeper.ZooKeeperMain$MyWatcher@27fa135a
+        2022-02-22 16:13:50,935 [myid:] - INFO  [main-SendThread():ClientCnxn$SendThread@933] - Opening socket connection to server /192.168.188.16:2181
+        Welcome to ZooKeeper!
+        JLine support is enabled
+        2022-02-22 16:13:50,964 [myid:] - INFO  [main-SendThread(192.168.188.16:2181):ZooKeeperSaslClient@125] - Client will not SASL-authenticate because the default JAAS configuration section 'Client' could not be found. If you are not using SASL, you may ignore this. On the other hand, if you expected SASL to work, please fix your JAAS configuration.
+        2022-02-22 16:13:50,979 [myid:] - INFO  [main-SendThread(192.168.188.16:2181):ClientCnxn$SendThread@846] - Socket connection established to 192.168.188.16/192.168.188.16:2181, initiating session
+        2022-02-22 16:13:51,008 [myid:] - INFO  [main-SendThread(192.168.188.16:2181):ClientCnxn$SendThread@1175] - Session establishment complete on server 192.168.188.16/192.168.188.16:2181, sessionid = 0x27f201f8ab50001, negotiated timeout = 30000
+
+        WATCHER::
+
+        WatchedEvent state:SyncConnected type:None path:null
+        [zk: 192.168.188.16:2181(CONNECTED) 0]
+
+5、查看节点状态
+    [root@localhost ~]# sh zkServer.sh status
+    JMX enabled by default
+    Using config: /home/zookeeper-3.4.3/bin/../conf/zoo.cfglll
+
+    Mode: follower
+
+    [root@localhost ~]# sh zkServer.sh status
+    JMX enabled by default
+    Using config: /home/zookeeper-3.4.3/bin/../conf/zoo.cfg
+    Mode: leader
+
+    [root@localhost ~]# sh zkServer.sh status
+    JMX enabled by default
+    Using config: /home/zookeeper-3.4.3/bin/../conf/zoo.cfg
+    Mode: observer
+
+5、查看节点下的内容
+[zk: localhost:2181(CONNECTED) 13] ls /dubbo-group/com.deepblue.api.EchoService/providers
+[dubbo%3A%2F%2F127.0.0.1%3A20882%2Fcom.deepblue.api.EchoService%3Fanyhost%3Dtrue%26application%3Ddubbo-provider%26bean.name%3Dproviders%3Adubbo%3AechoService%26default.deprecated%3Dfalse%26default.dynamic%3Dfalse%26default.register%3Dtrue%26deprecated%3Dfalse%26dubbo%3D2.0.2%26dynamic%3Dfalse%26generic%3Dfalse%26interface%3Dcom.deepblue.api.EchoService%26methods%3DsayHello%26pid%3D49356%26register%3Dtrue%26release%3D2.7.1%26side%3Dprovider%26timestamp%3D1648803446283, dubbo%3A%2F%2F127.0.0.1%3A20881%2Fcom.deepblue.api.EchoService%3Fanyhost%3Dtrue%26application%3Ddubbo-provider%26bean.name%3Dproviders%3Adubbo%3AechoService%26default.deprecated%3Dfalse%26default.dynamic%3Dfalse%26default.register%3Dtrue%26deprecated%3Dfalse%26dubbo%3D2.0.2%26dynamic%3Dfalse%26generic%3Dfalse%26interface%3Dcom.deepblue.api.EchoService%26methods%3DsayHello%26pid%3D49341%26register%3Dtrue%26release%3D2.7.1%26side%3Dprovider%26timestamp%3D1648803391565]
+
+[   // EchoService 中定义了两个方法 sayHello() 和 sayHello(String username);e
+    // TODO 但是在 zookeeper 的临时节点中只有一个 sayHello 方法, zookeeper 是不能通过函数特征标 (也称参数列表) 区分方法的, 所以这种 重名接口函数 尽量少用 或者 不用!
+    dubbo://127.0.0.1:20882/com.deepblue.api.EchoService?anyhost=true&application=dubbo-provider&bean.name=providers:dubbo:echoService&default.deprecated=false&default.dynamic=false&default.register=true&deprecated=false&dubbo=2.0.2&dynamic=false&generic=false&interface=com.deepblue.api.EchoService&methods=sayHello&pid=49356&register=true&release=2.7.1&side=provider&timestamp=1648803446283,
+    dubbo://127.0.0.1:20881/com.deepblue.api.EchoService?anyhost=true&application=dubbo-provider&bean.name=providers:dubbo:echoService&default.deprecated=false&default.dynamic=false&default.register=true&deprecated=false&dubbo=2.0.2&dynamic=false&generic=false&interface=com.deepblue.api.EchoService&methods=sayHello&pid=49341&register=true&release=2.7.1&side=provider&timestamp=1648803391565
+]
+
+
+-------------------------------------------------------------------- 集群监控 --------------------------------------------------------
+下载地址 https://github.com/DeemOpen/zkui.git
+
+修改文件 config.cfg 里面的 zkServer=192.168.188.15:2181,192.168.188.16:2181,192.168.188.17:2181,192.168.188.18:2181
+
+参考工程 zkui, 直接启动里面的 main 方法就OK了
+
+访问连接 http://localhost:9090
+
+
+

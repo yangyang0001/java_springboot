@@ -1,0 +1,139 @@
+-----------------------------------------------------------------------------------------------------------------------------------------
+------------------------------------------------------------ 第1篇 Elasticsearch入门 -----------------------------------------------------
+-----------------------------------------------------------------------------------------------------------------------------------------
+Elasticsearch 是什么?
+    首先Elasticsearch 是全文搜索引擎! 基于 Apache Lucene
+
+Elasticsearch 主要干什么?
+    电商使用的最普遍!
+
+倒排索引:
+    Lucene 使用三种文件存储, 文件之间的数据用指针来指向! 词库文件, 频次文件, 位置文件!
+
+    举例:
+        文章1: Tom lives in Guangzhou, I live in Guangzhou too
+        文章2: He once lived in Shanghai
+
+        分词器优化: 对标点符号, too in 等进行忽略! 中文分词器另当别论! lives lived 的优化处理都认为是 live! 大小统一为小写!
+
+        分词器产生的词库
+        shanghai
+        he
+        i
+        guangzhou
+
+        最终产生的倒排索引逻辑结构: 可以参考 01_Lucene创建倒排索引的过程.png, 物理结构是 三个文件: 词库文件, 频次文件, 位置文件!
+
+基础知识:
+    集群: cluster 每个集群都有唯一的名称!
+    节点: node
+    路由: 文档存储的时候, 只存储在一个主节点中, 这个过程是通过某种hash算法来实现的! 举例 有3个主节点, key hash 值为 hash(key) % 3 = 节点值!
+
+
+数据逻辑结构:
+
+    文档 document, 类型 type, 索引 index
+
+    index      相当于  MySQL 中的 数据库!
+    type       相当于  MySQL 中的 表!
+    document   相当于  MySQL 中的 行!
+
+
+-----------------------------------------------------------------------------------------------------------------------------------------
+------------------------------------------------------------ 第9篇 告警 监控 和 权限管理 ---------------------------------------------------
+-----------------------------------------------------------------------------------------------------------------------------------------
+本章讲解的插件都是收费的, 以后进行研究和学习吧!
+
+
+-----------------------------------------------------------------------------------------------------------------------------------------
+----------------------------------------------------------------- 第10篇 ELK 应用 --------------------------------------------------------
+-----------------------------------------------------------------------------------------------------------------------------------------
+Logstash
+    Logstash 原理图像 参考 01_logstash 原理图.png
+
+    Logstash 下载:  wget https://artifacts.elastic.co/downloads/logstash/logstash-6.5.0.tar.gz
+
+    下载完成后进行解压
+
+    测试是否可以使用:
+    ./logstash -e 'input { stdin{ } } output { stdout{ } }'
+    ./logstash -e 'input { stdin{ } } output { stdout{codec => rubydebug} }'
+
+    可以创建一个配置文件 logstash-simple.conf 使用命令 ./logstash -f ../config/logstash-simple.conf 测试!
+
+    测试结果:
+    [root@localhost bin]# ./logstash -f ../config/logstash-simple.conf
+    Sending Logstash logs to /home/logstash-6.5.0/logs which is now configured via log4j2.properties
+    [2022-04-25T20:39:25,349][WARN ][logstash.config.source.multilocal] Ignoring the 'pipelines.yml' file because modules or command line options are specified
+    [2022-04-25T20:39:25,419][INFO ][logstash.runner          ] Starting Logstash {"logstash.version"=>"6.5.0"}
+    [2022-04-25T20:39:28,516][INFO ][logstash.pipeline        ] Starting pipeline {:pipeline_id=>"main", "pipeline.workers"=>2, "pipeline.batch.size"=>125, "pipeline.batch.delay"=>50}
+    [2022-04-25T20:39:28,686][INFO ][logstash.pipeline        ] Pipeline started successfully {:pipeline_id=>"main", :thread=>"#<Thread:0x714d0d3b run>"}
+    The stdin plugin is now waiting for input:
+    [2022-04-25T20:39:28,777][INFO ][logstash.agent           ] Pipelines running {:count=>1, :running_pipelines=>[:main], :non_running_pipelines=>[]}
+    [2022-04-25T20:39:29,099][INFO ][logstash.agent           ] Successfully started Logstash API endpoint {:port=>9600}
+    zhangsan
+    {
+        "@timestamp" => 2022-04-25T12:39:35.562Z,
+          "@version" => "1",
+           "message" => "zhangsan",
+              "host" => "localhost.localdomain"
+    }
+    wangwu
+    {
+        "@timestamp" => 2022-04-25T12:39:45.883Z,
+          "@version" => "1",
+           "message" => "wangwu",
+              "host" => "localhost.localdomain"
+    }
+
+    输入到 elasticsearch 中
+    ./logstash -e 'input { stdin{ } } output { elasticsearch { hosts => ["192.168.188.12"] } }'
+
+
+    ./logstash -e 'input { stdin { } } output { elasticsearch { hosts => ["192.168.188.12:9200"] } stdout { codec => rubydebug } }'
+
+    在elasticsearch 中的展示如 logstash_elasticsearch展示.png
+
+
+配置文件结构:
+    配置文件由 输入 --> 过滤 --> 输出 三部分组成!
+
+    input {
+        ...
+    }
+
+    filter {
+        ...
+    }
+
+    output {
+        ...
+    }
+
+Logstash 插件使用
+
+    input 插件
+        file   插件
+        codec  插件
+        syslog 插件
+        tcp    插件
+
+
+    filter 插件
+        grok 插件
+
+    output 插件
+
+
+Logstash 解耦合
+    logstash 写入 redis 中, 然后 redis 写入 elasticsearch 中!
+
+
+
+
+
+
+
+
+
+

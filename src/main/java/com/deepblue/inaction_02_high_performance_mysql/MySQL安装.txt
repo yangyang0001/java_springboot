@@ -1,0 +1,68 @@
+MacOS 上安装 MySQL
+
+    1、下载安装文件:
+        MySQL官网: https://www.mysql.com/ 下载文件: mysql-8.0.27-macos11-x86_64.dmg
+
+    2、mysql-8.0.27-macos11-x86_64.dmg 进行安装, 一般的下一步操作就OK了
+
+    3、环境变量配置
+        编辑环境变量配置文件:
+            cd
+            vim .bash_profile
+
+            ############################################  mysql #########################################
+            export PATH=$PATH:/usr/local/mysql/bin
+            export PATH=$PATH:/usr/local/mysql/support-files
+
+            :wq!
+        使配置文件生效:
+            source .base_profile
+
+        验证环境变量是否生效:
+            echo $PATH
+
+    4、MySQL服务的停/启服务 命令
+        停止MySQL服务
+        mysql.server stop/start
+
+        重启MySQL服务
+        mysql.server restart
+
+        查看MySQL服务状态
+        mysql.server status
+
+        启动后进入mysql: mysql -u root -p 回车后, 输入 mysql 的密码即可
+
+    5、配置 mysql 的进程Id PID
+        进入到 /usr/local/mysql/support-files 目录。里面有个文件:my-default.cnf
+
+        将其复制到桌面上, 改名为my.cnf, 将内容替换为:
+
+        [mysqld]
+        default-storage-engine=INNODB
+        character-set-server=utf8
+        port = 3306
+
+        [client]
+        default-character-set=utf8
+
+        将修改后的文件my.cnf复制到 /etc 目录下
+
+        重启mysql
+        
+        可能出现的问题, mysql 没有PID 进程杀不掉
+        使用的mysqld_safe启动的mysql
+        
+        每次ps aux|grep mysql的进程，杀掉之后，又启动了。因为mysqld_safe的保护性
+        
+        正确步骤：
+        
+        杀掉mysqld_safe进程: 
+            ps aux|grep mysqld_safe 
+            kill -9 mysqld_safe 进程号
+        
+        杀掉mysql进程: ps aux|grep mysql kill -9 mysqld 进程号
+
+
+MacOS 上安装 Navicat
+

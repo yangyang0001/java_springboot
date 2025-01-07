@@ -1,0 +1,150 @@
+***********************************Key 的设计理念 ****************************************
+设计理念:	对象类型:对象ID:对象属性:对象子属性
+维护理念:	把所有的key的正则维护到一个地方, 便于开发中所有人方便查询, 使用, 维护
+
+
+
+********************************* 对key操作 **************************
+exists key		        测试指定key是否存在
+del key1 key2 ... keyN 	删除指定key
+type key 		        返回给定key对应的value类型
+keys pattern		    返回给定模式的key  例如:keys *; keys *e; keys a*等
+rename oldkey newkey 	给旧的的key 改名称
+dbsize			        返回当前数据库中的key的数量
+expire key seconds 	    为key指定过期时间
+ttl key			        返回key剩余的有效时间(秒为单位)
+select dbIndex		    选择数据库(redis支持的有效数据库为16个0-15) 例如:select 0 (默认的为第1个数据库); select 1
+move key dbIndex	    将key 移动到指定的数据库中	例如:move name 2(将当前数据库中name移动到第三个数据库中!)
+flushdb			        删除当前数据库中所有key
+flushall		        删除所有数据库中key
+
+
+***************************** 对 string 类型操作 ************************
+set key value 		                            设置key对应值为string类型的value
+mset key1 value1 key2 value2... keyN valueN     一次设置多个key值
+mget key1 key2... keyN                          一次获取多个key的值
+incr key 		                                对key的值做++操作, 并返回新的值(key的值必须为整形的)	这是原子性操作
+decr key 		                                对key的值做--操作, 并返回新的值(key的值必须为整形的)	这是原子性操作
+incrby key integer	                            对key加上指定的值(key的值必须为整形的)
+decrby key integer 	                            对key减去指定的值(key的值必须为整形的)
+append key value 	                            给指定key的字符串值连接上指定的 value :往往用来做字符串的拼接
+substr key start end 	                        截取key值所对应的的value字符串 包括start 和 end 位置的字符串(下标从0开始)
+strlen key		                                获取key值所对应的value的长度
+setex key seconds value                         设置 key 时间为 seconds, 值为 value;
+setnx key value                                 如果 key 不存在 则设置值为 value;
+
+set key value ex seconds nx                     分布式锁常用的原子性指令!
+
+
+***************************** 对 list 类型操作 *************************
+list的数据结构: 类似于 双向链表结构, 更深入一些: ziplist 组成的 quicklist;
+
+lpush key strValue	    从 left  往名称为key的list中添加string元素(left  push)
+rpush key strValue	    从 right 往名称为key的list中添加string元素(right push) 最常用!
+lpop key		        把 left  第一个元素移除(left  pop)
+rpop key		        把 right 第一个元素移除(right pop)
+lrange key start end 	查看名称为 key 的list 中[start-end]区间之内的元素(下标从0开始, start end 都表示下标); 特殊使用:lrange key 0 -1 查询出所有的来;
+llen key		        返回名称为 key 的list 中的 元素个数
+ltrim key start end	    从 left 起截取 [start-end] 区间之内的元素(下标从0开始, start end 都表示下标) 作为key的值, 操作成功返回OK! ltrim key 0 -1 (截取整个数组, 其实啥也没干)
+lrem key 值的个数 value	删除list中的key 对应的value值
+lindex key indexNum     下标从 left 开始, 查看 下标为 indexNum 的 元素; indexNum < 0时, -1: 倒数第一个, -2: 倒数第二个
+
+
+***************************** hash 类型的操作 **************************
+hash 的数据结构: 类似于 HashMap 数组 + 链表的结构!
+注意: 有相同的 key 时会报错; (error) WRONGTYPE Operation against a key holding the wrong kind of value
+
+hset key field value 		设置hash field 为指定值, 如果key不存在,则先创建;
+    举例:
+        127.0.0.1:6379> hset book java "think in java"
+        (integer) 1
+        127.0.0.1:6379> hset book jvm "hotspot"
+        (integer) 1
+        127.0.0.1:6379> hset book golang "concurrency in go"
+        (integer) 1
+
+hget key field			                    获取指定的 hash field
+    举例:
+        127.0.0.1:6379> hget book java
+        "think in java"
+        127.0.0.1:6379> hget book jvm
+        "hotspot"
+
+hmget key field1 ... fieldN	                获取全部指定的hash field
+    举例:
+        127.0.0.1:6379> hmget book java jvm
+        1) "think in java"
+        2) "hotspot"
+
+hmset key field1 value1 ... fieldN valueN 	同时设置多个field的值
+hincrby key field integer	                将指定的field加上指定的值
+hexists key field		                    测试指定field 是否存在
+hdel key field 			                    删除指定的hash field
+hlen key			                        返回指定hash 的 field的数量
+hkeys key			                        返回hash 的所有 field
+hvals key			                        返回hash 的所有 value
+hgetall key			                        返回hash 的所有 field 和 value
+
+
+***************************** 对无序集合 set 类型的操作(key中不允许有重复的value值) **************************
+数据结构类似于 java 的 HashSet
+注意: 有相同的 key 时会报错; (error) WRONGTYPE Operation against a key holding the wrong kind of value
+
+sadd key value 				        往名称为key的set中添加value 元素
+sadd key value1 value2 ... valueN 	往名称为key的set中添加value1 vlaue2... valueN元素
+smembers key 				        返回key对应的set中的所有元素, 结果是无序的
+srem key value				        从名称为key的set中移除value元素
+srem key value1 value2 ... valueN 	从名称为key的set中移除value1 vlaue2... valueN元素
+smove p1 p2 member			        从p1 set 中移除member元素,并添加到p2 set 中
+scard key				            返回名称为key的set中的元素个数
+sismember key member			    判断member是否在set集合中
+sinter key1 key2 ... keyN		    返回给定key的set的交集
+sunion key1 key2 ... keyN		    返回给定key的set的并集
+sdiff  key1 key2			        返回key1 - key2 的差集
+
+
+***************************** 对有序集合 zset 类型的操作(zset类型)(格式:值(score) 权(member)的组合) **************************
+zset 数据结构:
+    zset 是 SortedSet 和 HashMap 的结合体, 方面它是个 set, 保证了内部 value 的唯一性;
+    另方面它可 以给每个 value 赋予一个 score, 代表这个 value 的排序权重。它的内部实现用的是一种叫作 "跳跃列表" 的数据结构。
+
+zadd key score1 member1, score2 member2		添加元素多集合(也可以添加一个 score member)
+    举例:
+        127.0.0.1:6379> zadd books 1.0 java 2.0 jvm 3.0 python 2.2 mysql 3.1 mongodb
+        (integer) 5
+
+start end 都是下标, 从0开始!
+zrange key start end				        从集合中获取指定区间的元素, 返回结果是有序结果(集合中的元素按照score值从小到大排序)
+
+zrangebyscore key min max                   从集合中获取 score 值为 [min-max] 的元素, 返回结构是有序结果(集合中的元素按照score值从小到大排序),
+                                            min max 表示: score 的范围!
+
+zrevrange key start end				        从集合中获取指定区间的元素, 返回结果是有序结果(集合中的元素按照score值从大到小排序)
+
+zrevrangebyscore key max min                从集合中获取 score 值为 [max-min] 的元素, 返回结构是有序结果(集合中的元素按照score值从大到小排序),
+                                            max min 表示: score 的范围!
+
+zrem key member					            删除指定元素
+zincrby key incr member				        按incr幅度,增加member的score值
+
+zrank key member				            返回指定元素在集合中的下标(集合中的元素按照score值从小到大排序)
+zrevrank key member				            返回指定元素在集合中的下标(集合中的元素按照score值从大到小排序)
+
+zcard key					                返回集合中的元素个数
+zscore key member				            返回给定元素对应的score
+zremrangebyrank key min max			        删除集合中排名在给定区间的元素(按score从小到大排序)[包含min和max]
+
+
+******************************************************************************************
+
+持久化操作:
+	1.快照持久化
+	一次性将redis中的全部数据保存一份到硬盘中!该持久化是默认开启的!默认产生一个文件dump.rdb
+	手动发起快照持久化:
+	linux下的快照持久化命令:
+				./redis-cli -h 127.0.0.1 -p bgsave 或在本地时直接用 ./redis-cli bgsave
+	2.AOF持久化
+	linux下的aof持久化命令:
+				./redis-cli -h 127.0.0.1 -p bgrewriteaof或./redis-cli bgrewriteaof
+
+

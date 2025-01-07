@@ -1,0 +1,939 @@
+-----------------------------------------------------------------------------------------------------------------------------------------
+------------------------------------------------------------- 第1章 MySQL架构和历史 -------------------------------------------------------
+-----------------------------------------------------------------------------------------------------------------------------------------
+MySQL 最重要的部分: 数据处理 和 数据存储 分离的架构!
+
+    第一层: 客户端 Client 不是MySQL 独有, 几乎互联网都在使用这种模式!
+    第二层: 查询功能核心服务, 包括: 解析器, 优化器, 查询缓存!
+    第三层: 存储引擎部分, 负责数据的存储和提取, 主要通过存储引擎提供的API, 类似于我们编写代码对应的函数 要 Select, Query 哪些东西是一样的!
+
+MySQL 提供了两种锁: 读写锁, 书中例子: 邮箱 和 邮箱中的文件! 可以参考 java_concurrent
+
+MySQL 提供了两种锁的粒度: 表锁 和 行锁!
+    表锁: 举例 ALTER TABLE 语句会用到表锁, 忽略掉存储引擎提供的锁!
+    行锁: 只在 存储引擎层 提供了行锁, 在逻辑架构中的其它层没有提供行锁的概念!
+
+MySQL 表锁: update, delete 不走索引, 或者 走索引 但 where 是非确定值查询时(类似于 like, != 之类的 非确定值) 都为 表锁;
+
+事务:
+    什么是事务? 事务: 一组独立的工作单元 或者 一组原子性的SQL, 可以包含一个 或者 多个 SQL 语句!
+
+四种隔离级别: MySQL 的默认隔离级别为 REPEATABLE READ (可重复读)
+
+    READ UNCOMMITTED: 读出未提交的数据, 产生脏读!
+
+    READ COMMITTED: 读出已经提交的, 可能会造成 两次连续读取的数据不一致, 但不影响 数据最终一致性, 这也是大部分数据库采用的 事务默认隔离级别!
+
+    REPEATABLE READ: MySQL 采用的 事务默认隔离级别! 具体操作如下:
+        窗口1:
+            START TRANSACTION;
+                    SELECT @@transaction_isolation;
+                    SELECT * FROM DEPT WHERE DEPT.DEPTNO BETWEEN 10 AND 50;
+                    SELECT SLEEP(10);
+                    SELECT * FROM DEPT WHERE DEPT.DEPTNO BETWEEN 10 AND 60;
+            COMMIT;
+
+
+        窗口2:
+            START TRANSACTION;
+                SELECT @@transaction_isolation;
+                INSERT INTO dept VALUES (50, 'LEADERSHIP', 'BEI JING');
+            COMMIT;
+
+        TODO 经验证 并没有发生 这种幻读的现象! 反而验证了 MVCC 模式, 在同一个事务中, 无论执行时间有多长, 看到的数据都是一致的!
+
+        幻读: 是针对 范围读取的操作, 前后两次读取的数据不一致 就叫做幻读!
+
+    SERIALIZABLE: 加锁读, 这种隔离级别最高, 一般不采用: 因为锁的开销大, 影响数据库的吞吐量, 且只要是数据最终一致性没有问题, 没有必要非得采用这种隔离级别!
+
+死锁:
+    窗口1:
+        START TRANSACTION;
+        	UPDATE DEPT SET dept.DNAME = "LEADERSHIP001" WHERE dept.DEPTNO = 50;
+        	SELECT SLEEP(10);
+        	UPDATE DEPT SET dept.DNAME = "PHONE001" WHERE dept.DEPTNO = 60;
+        COMMIT;
+
+    窗口2:
+        START TRANSACTION;
+        	UPDATE DEPT SET dept.DNAME = "PHONE002" WHERE dept.DEPTNO = 60;
+        	SELECT SLEEP(10);
+        	UPDATE DEPT SET dept.DNAME = "LEADERSHIP002" WHERE dept.DEPTNO = 50;
+        COMMIT;
+
+    TODO 经过验证, 窗口2发生: 1213 - Deadlock found when trying to get lock; try restarting transaction, Time: 0.002000s
+
+死锁测试过程:
+    首先: 打开两个 shell 端, 通过命令 mysql -uroot -p 进入 mysql!
+
+    第一步:
+        窗口A:
+            mysql> use mysql_transaction;
+                    Database changed
+
+            mysql> begin;
+            Query OK, 0 rows affected (0.00 sec)
+
+            mysql> update student set student_name = 'zhangsan_lock_A' where id = 1;
+            Query OK, 1 row affected (0.00 sec)
+            Rows matched: 1  Changed: 1  Warnings: 0
+
+
+        窗口B:
+            mysql> use mysql_transaction;
+                    Database changed
+
+            mysql> begin;
+            Query OK, 0 rows affected (0.00 sec)
+
+            mysql> update student set student_name = 'xiaoming_lock_B' where id = 3;
+            Query OK, 1 row affected (0.00 sec)
+            Rows matched: 1  Changed: 1  Warnings: 0
+
+    第二步:
+        窗口A:
+            mysql> update student set student_name = 'xiaoming_lock_A' where id = 3; 按下回车进行等待!
+
+
+        窗口B:
+            mysql> update student set student_name = 'zhangsan_lock_B' where id = 1; 按下回车出现如下问题:
+            ERROR 1213 (40001): Deadlock found when trying to get lock; try restarting transaction
+
+
+死锁解决方案:
+    mysql innodb 中有如下的 两个参数: innodb_lock_wait_timeout, innodb_deadlock_detect 都默认开启了! 就可以自动解决死锁问题了!
+
+        mysql> use mysql_transaction;
+        Database changed
+        mysql> show variables like 'innodb_lock_wait_timeout';
+        +--------------------------+-------+
+        | Variable_name            | Value |
+        +--------------------------+-------+
+        | innodb_lock_wait_timeout | 50    |
+        +--------------------------+-------+
+        1 row in set (0.00 sec)
+
+        mysql> show variables like 'innodb_deadlock_detect';
+        +------------------------+-------+
+        | Variable_name          | Value |
+        +------------------------+-------+
+        | innodb_deadlock_detect | ON    |
+        +------------------------+-------+
+        1 row in set (0.00 sec)
+
+
+
+事务日志:
+    日志目的: 提高事务的执行效率
+    执行方式: 内存提交事务 ---> 写入磁盘事务日志 ---> 执行磁盘事务日志 ---> 将数据写入到磁盘文件中
+
+    在内存中提交的事务 首先写入到磁盘中的事务日志文件中, 存储引擎可以在后台执行这个事务日志, 将数据写入到磁盘中, 发生两次写磁盘的动作!
+
+MySQL 中的事务
+    MySQL 提供了两种事务型的存储引擎: InnoDB 和 NDB Cluster!
+    MySQL 默认的事务提交方式为 AUTOCOMMIT; 查看当前数据库事务的默认提交方式: SHOW VARIABLES like "AUTOCOMMIT";
+
+    对于事务型的表:
+        MySQL 中如果没有使用 start transaction; 来开启事务, 则 MySQL 将每条执行的语句都当做一个事务来处理, 且这些事务都是自动提交!
+
+    对于非事务型的表:
+        如MyISAM 或者内存表来说, 没有事务COMMIT 或者 ROLLBACK 的概念, 每条执行语句都当做事务, 且采用 AUTOCOMMIT 处理!
+
+    设置当前会话的事务隔离级别: SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+
+    总结: 无论是事务型表还是非事务型表 都是采用的 AUTOCOMMIT 的事务提交方式!
+
+在同一事务中使用不同的存储引擎
+    同一个事务中 同时使用不同的存储引擎 是不可靠的; 假设一个事务中使用了 InnoDB表 和 MyISAM表 一旦事务执行失败, 只能回滚InnoDB表中的数据, 非事务型表是不能回滚的!
+
+隐式和显式锁定
+    隐式加锁: 在执行 commit 或者 rollback 时, 当前事务中的锁 被同时释放掉!
+
+    显式加锁:
+            select * from table_name for update;
+            select * from table_name lock in share mode;
+
+多版本号并发控制: MVCC (multiversion concurrent control)
+    InnoDB 存储引擎中的 每个数据行中都有两个版本字段: 创建版本号, 删除版本号
+    InnoDB select 查询的数据 = [事务版本号 >= 创建版本号] - [事务版本号 >= 删除版本号] 的数据
+
+    InnoDB 下的 常用语句:
+        select : 查询数据 = [事务版本号 >= 创建版本号] - [事务版本号 >= 删除版本号] 的数据
+        insert : 插入数据, 创建版本号 = 事务版本号
+        delete : 删除数据, 删除版本号 = 事务版本号
+        update : 插入数据, 创建版本号 = 事务版本号; 并且修改原始数据的删除版本号 = 事务版本号
+
+    这种MVCC 控制, 只能在 READ COMMITTED 和 REPEATABLE READ 两种隔离级别下使用; READ UNCOMMITTED 和 SERIALIZABLE 是不适合的!
+
+MySQL 存储引擎
+    mysql> show table status like "dept" \G;
+    *************************** 1. row ***************************
+               Name: dept
+             Engine: InnoDB
+            Version: 10
+         Row_format: Dynamic
+               Rows: 2
+     Avg_row_length: 8192
+        Data_length: 16384
+    Max_data_length: 0
+       Index_length: 0
+          Data_free: 0
+     Auto_increment: NULL
+        Create_time: 2022-01-10 10:39:07
+        Update_time: 2022-01-10 10:39:07
+         Check_time: NULL
+          Collation: utf8_general_ci
+           Checksum: NULL
+     Create_options:
+            Comment:
+    1 row in set (0.01 sec)
+
+    ERROR:
+    No query specified
+
+    InnoDB 存储引擎
+        InnoDB 可以将每个表的数据和索引 存放在单独的文件中, 属于 事务型存储引擎!
+        InnoDB 是 MySQL 的默认存储引擎, 使用 MVCC 支撑高并发, 提供4种事务的隔离级别, 默认事务隔离级别为 REPEATABLE READ, 且通过间隙锁的方式防止幻读的出现!
+        InnoDB 是 基于聚簇索引建立的, 对主键的查询效率非常高! 二级索引(非主键索引)中一定会包含主键字段, 因此在建立二级索引的时候要注意主键不能是特别大的字段!
+        InnoDB 支持热备份, MySQL 的其他存储引擎不支持热备份!
+
+    MyISAM 存储引擎
+        MyISAM 是 MySQL 5.1 之前的默认存储引擎, 属于 非事务型的存储引擎!
+        MyISAM 不支持事务和行锁, 因此崩溃之后 无法通过事务日志进行回滚数据, 进行数据的恢复!
+        MyISAM 不是一无是处, 对于大量读取 且可以忍受修复的 业务来说也是一个不错的选择, 但它不是首选存储引擎, InnoDB 才是首先存储引擎!
+        MyISAM 表的最大长度 = MAX_ROWS * Avg_row_length 来计算
+
+    MyISAM 特性
+        加锁与并发: 只能加表锁!
+        索引的特性: MyISAM 表可以对 Blob 和 Text 这种大字段的 前 500个字符 进行创建索引!
+
+    MyISAM 压缩表
+        如果表在创建并导人数据以后, 不会再进行修改操作, 那么这样的表或许适合采用 MyISAM 压缩表, TODO 这种情况很难遇到, 一张表数据不变几乎不太可能!
+        压缩表时 是针对 行记录 单独压缩的, 读取 行记录 的时候不必解压整张表!
+
+    MyISAM 性能
+        性能的瓶颈也是表锁, 如果很多查询都出现 Locked 的情况, 多数原因都是因为 表锁导致的!
+
+MySQL 其他的引擎
+    Archive 引擎
+        Archive 引擎 只支持 insert 和 select 操作的数据库引擎, 属于 非事务型存储引擎!
+        每次 select 操作都进行全表扫描, 所以 Archive 存储引擎只适合 日志和数据采集类应用, 日志的分析 和 数据汇总 等往往需要用到全表扫描!
+        读取特性:
+            在一个查询开始直到返回表中存在的所有行数之前, Archive 引擎会阻止其他的 select 执行, 以实现一致性读, TODO 对并发读取没有任何好处
+        插入特性:
+            是一个针对高速插入和压缩做了优化的简单引擎, 用到了专用的缓冲区来实现高并发插入!
+
+    Blackhole 引擎: 丢弃所有插入的数据, 不做任何的保存, 但会 记录 Blackhole 表日志, 用于备份相关 目前引擎功能问题很大, 强烈建议不使用!
+
+    CSV 引擎: 可以将 Excel 等电子表格软件中的数据存储为 csv 文件, 然后复制到 MySQL 数据目录下, 就能在 MySQL 中打开使用
+
+    Memory 引擎: 基于内存的表, 数据都在内存中保存, 数据库重启后数据丢失, 表结构依然存在!
+
+    NDB 集群引擎
+        2003 年, 当时的 MySQL AB 公司从索尼爱立信公司收购了 NDB 数据库, 然后开发了NDB 集群存储引擎, 作为 SQL 和 NDB 原生协议之间的接口
+        MySQL 服务器、 NDB 集群存储引擎, 以及分布式的、 share - nothing 的、容灾的、高可用的 NDB 数据库的组合, 被称为 MySQL 集群（ MySQL Cluster）
+
+第三方存储引擎: 大致了解即可!
+
+TODO 我们该如何选择我们的存储引擎呢?
+    除非需要用到某些 InnoDB 不具备的特性, 并且没有其他办法可以替代, 否则都应该优先选择 InnoDB 引擎
+    除非万不得已, 建议不要混合使用 多种存储引擎, 否则可能带来一系列复杂的问题, 以及一些潜在的 bug 和边界问题
+
+    如果应用需要不同的存储引擎,  i青先考虑以下几个因素:
+    事务:
+        如果包含事务型操作: InnoDB 是目前最稳定的存储引擎
+        如果不包含事务操作: MyISAM 是比较好的选择, 大量的 select 和 insert 操作, 不需要事务来支撑, 当前存储引擎是首选!
+
+    备份:
+        在线热备份 InnoDB 就已经满足了!
+
+    崩溃回复:
+        首选事务型数据库 InnoDB
+
+修改表的存储引擎 有三种方式:
+    第一种: alter table table_name engin = InnoDB;
+        这种方式会在原表上添加 表的一个读锁, 繁忙的表上禁止使用这种方式修改表的存储引擎!
+
+    第二种: 如果数据量不是特别大, 导出原表的一个 结构 + 数据的 文件, 然后修改里面的内容, drop table 表名称, create table 表名称, 存储引擎也需要修改!
+
+    第三种: 如果表数据量不大, 先创建一个引擎为目标引擎的表 table_name_target, 然后直接使用: insert into table_name_target select * from table_name_source;
+           如果表数据非常大, 可以通过编写 SQL 的方式执行, 也可以通过程序来执行, 如下的操作:
+           start transaction;
+           insert into table_name_target select * from table_name_source where id begin X and Y;
+           commit;
+
+
+-----------------------------------------------------------------------------------------------------------------------------------------
+------------------------------------------------------------- 第2章 MySQL 基准测试 -------------------------------------------------------
+-----------------------------------------------------------------------------------------------------------------------------------------
+为什么要进行基准测试?
+    对当前环境有个良好的把控, 可以知道现在的并发, 某些异常的还原, 对超出当前环境的高并发高压力的一种瓶颈测试, 了解的最基础的状况是为了对未来扩展有更好的把控!
+
+基准测试的策略:
+    1、联合测试 也叫 集成测试, 集成测试更能体现 现实中 软硬件的 状况, 因为这种要环境 要直接在线上使用!
+    2、单组件测试
+
+基准测试有什么指标?
+    测试目标决定了选择什么样的测试工具和技术, 以获得精确而有意义的测试结果
+
+常用参考的测试指标:
+    吞吐量: 单位时间内完成的事务数量!
+    响应时间: response time 或者 延迟时间!
+    并发性: 单位时间的请求数量, 尤其在Web服务器中 并发量 不等于 Session 数量, 同样 Web并发性不等同于 数据库的并发性!
+
+    总结: 测试主要测试 高并发下 吞吐量 和 响应时间的 变化, 以便掌握并发拐点, 在并发量达到拐点时 有响应的应对策略!
+
+常用测试方法:
+    注意错误的测试方法, 尽可能的用还原现实情况下进行压力测试, 当然如果做不到 可用单台进行单一模拟, 也需要具体情况具体分析!
+
+
+-----------------------------------------------------------------------------------------------------------------------------------------
+----------------------------------------------------------- 第4章 Schema 与数据类型优化 ---------------------------------------------------
+-----------------------------------------------------------------------------------------------------------------------------------------
+选择优化的数据类型
+    如何选择最优的数据类型原则:
+
+        更小的通常最好:
+            如果在不知道选择哪种数据类型的时候, 尽量选择那些已经够用的最小类型, 也不能设计的不够使用因为后期一旦数据量非常大, 修改数据类型非常麻烦!
+
+        简单就好:
+            整形比字符串类型处理速度更快!
+
+        尽量避免 NULL:
+            如果计划在该列上建立索引, 尽量设计为 NOT NULL; 因为 NULL 带来的性能更差, 当然这种优化带来的效果不大, 也并非首选优化项! 这应该成为一种良好的习惯!
+            有通常情况, 也有例外情况: 例如 InnoDB 存储引擎下 bit 列 可为 NULL 可以节省空间, 举例: 我们通常很少在 稀疏列 创建索引, 这时可以设置列为 NULL,
+            但这种情况在 MyISAM 中一点都不适用!
+
+        合适的时间类型:
+            Datetime 和 timestamp 都可以表示日期: 年月日时分秒; timestamp 却只占用 datetime 的一半存储空间, 也可以随时区自动变化; 但 timestamp 能够表达的时间范围要小的多!
+
+    整数类型
+
+    实数类型
+
+    字符串类型
+        1、最常用的两种字符串类型: varchar 和 char
+            二者区别:
+                varchar 是变长的字符串, char 是定长的字符串!
+                varchar 保留最后的空格, char 不保留最后的空格!
+
+                varchar 在 255个字节以下, 用一个额外字节表示 varchar 长度; 在 255 个字节长度以上 用2个字节表示长度!
+                验证:
+                    CREATE TABLE table_innodb (
+                      id bigint NOT NULL AUTO_INCREMENT,
+                      user_name varchar(255) DEFAULT NULL,
+                      password varchar(255) DEFAULT NULL,
+                      age int DEFAULT NULL,
+                      gender int NOT NULL COMMENT '0: 女, 1: 男',
+                      score decimal(65,2) DEFAULT NULL,
+                      varchar_test varchar(255) DEFAULT NULL,
+                      char_test char(255) DEFAULT NULL,
+                      PRIMARY KEY (id)
+                    ) ENGINE=InnoDB AUTO_INCREMENT=11 DEFAULT CHARSET=utf8mb3
+
+                    插入测试数据:
+                        INSERT INTO table_innodb(user_name, password, age, gender, score, varchar_test, char_test) VALUES ('小明0001', '123456', 10, 0, NULL, "hello", 'hello');
+                        INSERT INTO table_innodb(user_name, password, age, gender, score, varchar_test, char_test) VALUES ('小明0002', '123456', 10, 0, NULL, " hello", ' hello');
+                        INSERT INTO table_innodb(user_name, password, age, gender, score, varchar_test, char_test) VALUES ('小明0003', '123456', 10, 0, NULL, " hello     ", ' hello     ');
+
+                    查询:
+                        select CONCAT("'", varchar_test, "'"), CONCAT("'", char_test, "'") from table_innodb t WHERE id IN(11, 12, 13);
+
+                    结果:
+                        CONCAT("'", varchar_test, "'")	    CONCAT("'", char_test, "'") TODO 证明 字符串最后面无论有多少个空格, char 类型都自动去掉!
+                        'hello'	                            'hello'
+                        ' hello'	                        ' hello'
+                        ' hello     '	                    ' hello'
+
+        2、blob 和 text 类型
+            二者区别:
+                LOB 和 TEXT 家族之间仅有的不同是: BLOB 类型存储的是二进制数据, 没有字符集 也 没有排序规则; 而 TEXT 类型有字符集和排序规则!
+
+            磁盘临时表 和 文件排序
+                最好的解决方案是尽量避免使用 BLOB 和 TEXT 类型 。 如果实在无法避免, 有一个技巧是在所有用到 BLOB 字段的地方都
+                使用 substring(column, length） 将列值转换为字符串(在 order by 子句中也适用), 这样就可以使用内存临时表了.
+                TODO 但是要确保 截取的子字符串足够短, 不会使 临时表的大小 超过 max_heap_table_size 或 tmp_table_size
+                TODO 超过以后MySQL会将 内存临时表 转换为 MyISAM 磁盘临时表!
+
+                SHOW VARIABLES LIKE "max_heap_table_size";	-- 16777216 字节 = 16M
+                SHOW VARIABLES LIKE "tmp_table_size";		-- 16777216 字节 = 16M
+
+            如果 explain 的 extra 列包含 "Using temporary", 则说明这个查询使用了隐式临时表!
+
+    通用的设计实践, 在“查找表” 时采用 整数主键 而避免采用基于 字符串的值进行关联
+
+    日期和时间类型: datetime 和 timestamp
+        datetime  采用8个字节存储日期, 可以精确到秒, 能够存储的年份: 从 1001年 到 9999年!
+        timestamp 采用4个字节存储日期, 可以精确到秒, 能够存储的年份: 从 1970年 到 2038年! 且是从1970年1月1日开始!
+
+        如果想使用比秒更精细的粒度应该如何处理?
+            MySQL 目前没有提供合适的数据类型, 但是可以使用自己的存储格式:
+                可以使用 bigint 类型存储微秒级别的时间截
+                可以使用 double 存储秒之后的小数部分
+                可以使用 MariaDB 替代 MySQL
+            一般 java 使用使用的 bigint 存储到毫秒就OK了, 时间一般到这里就够用了!
+
+    位数据类型
+        MySQL 有少数几种存储类型使用紧凑的位存储数据; 所有这些位类型, 不管底层存储格式和处理方式如何, 从技术上来说都是字符串类型! 现实中几乎不用, 因为通用性差!
+
+范式和反范式
+
+加快 alter table 语句的速度
+    alter table table_innodb modify column age int not null default 25;
+    这种方式创建表, 会复制表, 效率不高, 但是只能使用这种方式修改 not null 之类的!
+
+    alter table table_innodb alter column age set default 28;
+    这种方式设置默认值是 直接修改文件, 不会复制表, 效率很高!
+
+-----------------------------------------------------------------------------------------------------------------------------------------
+-------------------------------------------------------------- 第5章 创建高性能索引 --------------------------------------------------------
+-----------------------------------------------------------------------------------------------------------------------------------------
+索引 在MySQL 中叫 Key; 索引是一种便于快速查找存储引擎中数据 的 数据结构!
+
+索引基础:
+    我们看书如何查找我们想看的东西?
+        首先查看目录中是否有我们想要的内容?
+            如果有:
+                我们直接从目录中获取 或者 根据目录中的指示 我们直接定位哪一页来获取我们想要的内容
+            如果没有:
+                有没有类似的内容或者相近的内容?
+                    如果有:
+                        我们从相似的内容中 来 获取我们想要的内容
+                    如果没有:
+                        从整本书中 来 获取我们想要的内容
+
+索引可以包含一个或多个列的值; 如果索引 包含多个列, 那么列的顺序也十分重要, 因为 MySQL 只能高效地使用索引的最左前缀列!
+    举例: 假设我们创建了一个索引: (a, b, c) 三列索引 相当于创建了 (a)索引, (a, b)索引, (a, b, c) 索引!
+
+索引存储的位置: 是在存储引擎层实现, 不是在查询服务层实现!
+
+索引的类型:
+    从结构上来说包含以下索引: B-Tree 索引(没有其他说明, 默认认为是这种索引), Hash 索引, 空间数据索引(R-Tree), 全文索引, 其他类型的索引(了解)
+
+    B-Tree 索引
+
+        B-Tree 索引, 如果没有特殊声明 我们所说的索引都是指B-Tree 索引! NDB Cluster 实现的 BTree, InnoDB 则是实现的 B+Tree 索引!
+
+        InnoDB 使用主键 引用 被索引的行, MyISAM 使用源数据的物理位置 引用 被索引的行!
+
+        创建表:
+            CREATE TABLE people (
+              id bigint NOT NULL AUTO_INCREMENT,
+              last_name varchar(50) NOT NULL,
+              first_name varchar(50) NOT NULL,
+              birthday date NOT NULL,
+              gender int NOT NULL,
+              PRIMARY KEY (id),
+              KEY idx_last_first_birth (last_name, first_name, birthday)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3;
+
+        插入测试数据:
+            insert into people(last_name, first_name, birthday, gender) values("Allen", "Cuba", "1960-01-01", 0);
+            insert into people(last_name, first_name, birthday, gender) values("Astaire", "Angelina", "1980-03-04", 1);
+            insert into people(last_name, first_name, birthday, gender) values("Barrymore", "Julia", "2000-05-16", 1);
+            insert into people(last_name, first_name, birthday, gender) values("Akroyd", "Christian", "1958-12-07", 1);
+            insert into people(last_name, first_name, birthday, gender) values("Akroyd", "Debbie", "1990-03-18", 0);
+            insert into people(last_name, first_name, birthday, gender) values("Akroyd", "Kirsten", "1978-11-02", 0);
+            insert into people(last_name, first_name, birthday, gender) values("Allen", "Kim", "1930-07-12", 1);
+            insert into people(last_name, first_name, birthday, gender) values("Allen", "Meryl", "1980-12-12", 1);
+            insert into people(last_name, first_name, birthday, gender) values("Basinger", "Viven", "1976-12-08", 0);
+            insert into people(last_name, first_name, birthday, gender) values("Basinger", "Viven", "1979-01-24", 1);
+
+        TODO B-Tree 索引对哪些查询有效呢?
+
+            全值匹配:
+                什么是全值匹配?
+                    查询条件 和 索引中的所有列 进行匹配!
+                举例:
+                    select * from people where last_name = "Allen" and first_name = "Cuba" and birthday = "1960-01-01";
+
+            最左匹配:
+                什么是最左匹配?
+                    查询条件 和 索引中最左一列 进行匹配!
+                举例:
+                    select * from people where last_name = "Allen";
+
+            最左前缀匹配:
+                什么是最左前缀匹配?
+                    查询条件 和 索引中的最左一列 进行匹配, 这里用这里列中前缀数据
+                举例:
+                    select * from people where last_name like "B%";
+
+            最左范围匹配:
+                什么是最左范围匹配?
+                    查询条件 和 索引中的最左一列 进行匹配, 这里用到列中的数据范围
+                举例:
+                    select * from people where last_name between "Allen" and "Barrymore";
+
+            精确匹配最左第一列 并 范围匹配最左第二列
+                举例:
+                    select * from people where last_name = "Allen" and first_name between "Kim" and "Cuba";
+
+            只访问索引的查询
+                只需索引就可以把查询办理, 这种索引称为 覆盖索引! 这种情况只适合一部分数据, 举例: 如果书籍只有目录就可以了, 书籍不就需要内容了, 这显然是违背现实世界的!
+
+            因为索引节点是有序的, 所以也支持 order by 的查询操作(前提是 order by 子句满足上面列出的情况)!
+
+        TODO B-Tree 索引对哪些查询无效呢?
+
+            没有使用最左匹配的查询, 只要没有最左列的 或者 不按照索引中的顺序的 都无法使用索引!
+                举例:
+                    select * from people where first_name like "%b%" and birthday = "1960-01-01";
+
+            如果查询中有某个列的范围查询, 则其右边所有列都无能使用索引优化查找
+                举例:
+                    select * from people where first_name like "C%" and birthday = "1960-01-01";
+                    explain select * from people where first_name like "C%" and birthday = "1960-01-01";
+
+
+    Hash 索引 : 目前只有 Memory 存储引擎 能够支持 Hash 索引! Memory 存储引擎的特点: 一旦服务重启 数据完全丢失!
+
+        创建表:
+            CREATE TABLE testhash (
+              id int NOT NULL AUTO_INCREMENT,
+              first_name varchar(255) DEFAULT NULL,
+              last_name varchar(255) DEFAULT NULL,
+              PRIMARY KEY (id),
+              KEY idx_first_last (first_name,last_name)
+            ) ENGINE=MEMORY DEFAULT CHARSET=utf8mb3
+
+        插入测试数据
+            insert into testhash(first_name, last_name) values("Arjen", "Lentz");
+            insert into testhash(first_name, last_name) values("Baron", "Schwartz");
+            insert into testhash(first_name, last_name) values("Peter", "Zaitsev");
+            insert into testhash(first_name, last_name) values("Vadim", "Tkachenko");
+
+        Hash 索引的数据结构
+            假定当前的 hash 函数为 f(first_name, last_name), 通过计算得到的哈希值为:
+            f("Arjen", "Lentz")     = 2323
+            f("Baron", "Schwartz")  = 7437
+            f("Peter", "Zaitsev")   = 8784
+            f("Vadim", "Tkachenko") = 2458
+
+            则 Hash 索引的数据结构如下:
+            -------------------------
+            槽（ Slot ）   值（ Value )
+            2323 指向第    第 1 行的指针
+            2458 指向第    第 4 行的指针
+            7437 指向第    第 2 行的指针
+            8784 指向第    第 3 行的指针
+
+        Hash 索引支持那些查询?
+            全值匹配查询, 不支持 单索引列 也 不支持 部分索引列!
+                举例:
+                    select * from testhash where first_name = "Peter" and last_name = "Zaitsev";
+
+
+
+        Hash 索引 不支持哪些查询?
+            不支持 非全值匹配
+                举例:
+                    select * from testhash where first_name = "Peter";
+
+            不支持范围查询
+
+            不支持排序查询
+
+        Hash 索引一般的使用方式, 假设有一个表 url_table, 内存存储着 url 列, 我们处理方式一般是 再创建一个列 crc_url 列 然后在 crc_url 列上创建索引!
+            使用方式为:
+            select * from url_table where url = "http://www.google.com" and crc_url = CRC32("http://www.google.com");
+            这里的 and 也是必须要写的, 因为可能碰到 hash 冲突! 用 and 去排除才能得到想要的值!
+
+
+    空间数据索引: MySQL 提供这种索引是处理 地理位置的索引, 也必须要使用 MySQL 内部的函数来配合使用, 因 MySQL 中这种特性并不完备, 因此不建议使用!
+
+    全文索引: 是一种特殊的索引, 不是基于 where 值索引!
+
+索引的优点:
+    1、索引大大减少了服务器需要扫描的数据量
+    2、索引可以帮助服务器避免排序和临时表
+    3、索引可以将随机 I/O 变为 顺序 I/O
+
+高性能索引的使用策略
+    独立的列
+        如果 索引列 是表达式 或者 函数的一部分则不能使用 当前列的索引!
+        举例:
+            select * from test_actor where id + 1= 5;
+
+            // 这种如果在 actor_id 上有索引, 这种还是能够使用到索引的, 书籍中 列作为函数的一部分 并不正确!
+            select sum(actor_id = 120) from test_actor;
+
+    前缀索引 和 索引选择性
+        有时候需要在varchar(1000) 甚至更长的 字符串列上 创建索引, 这时候就需要使用到前缀索引, 前缀索引不能 参与 order by 和 group by 的查询!
+        举例:
+            算法:
+                完整列的选择性: select count(DISTINCT(city)) / count(*) from test_city;
+                前缀列的选择性: select count(DISTINCT(left(city, N))) / count(*) from test_city;
+
+            过程:
+                计算完整列选择性:
+                select count(DISTINCT(city)) / count(*) from test_city;             -- 1.0000
+
+                计算前缀列选择性: (N从3到8的查询)
+                select count(DISTINCT(left(city, 3))) / count(*) from test_city;    -- 0.7943
+                select count(DISTINCT(left(city, 4))) / count(*) from test_city;    -- 0.8857
+                select count(DISTINCT(left(city, 5))) / count(*) from test_city;    -- 0.9543
+                select count(DISTINCT(left(city, 6))) / count(*) from test_city;    -- 0.9829
+                select count(DISTINCT(left(city, 7))) / count(*) from test_city;    -- 0.9886
+                select count(DISTINCT(left(city, 8))) / count(*) from test_city;    -- 1.0000
+
+            结果:
+                不断尝试可以得到一个N值, 使第二个查询获得的值 和 第一个值更接近, 就可以创建索引了; 索引列为 city 长度为8就可以了
+
+        列的选择性算法: select count(distinct(colunm_name)) / count(*) from table_name; 值越大选择性越高!
+
+    多列索引
+        合并索引策略在 MySQL 4.1 版本之后 已经成为内置的优化项 (index merge), 一旦在 explain 的 Extra 列中出现 Using union(PRIMARY,idx_actor_id); Using where
+        往往意味着这索引建立的是有问题的, 单列索引, 不如搞个多列索引!
+
+
+    选择合适的索引列顺序
+        我们遇到的最容易引起困惑的问题就是索引列的顺序问题! 
+        确的顺序依赖于使用该索引的查询, 并且同时需要考虑如何更好地满足 排序和分组 的需要 (顺便说明, 本节内容适用于B-Tree索引; 哈希或者其他类型的索引 并不会像B-Tree索引一样按顺序存储数据)
+
+        除了列的选择性来 处理 查询列的顺序以外, 往往遇到具体的情况, 我们还需要看一下:
+        select sum(column_name = XXX) from table_name 到底有多少行记录, 如果行的记录太多, 说明这个列的散列性不强, 即 count(distinct(cloumn)) 不大!
+
+    聚簇索引
+        聚簇索引包含: 索引 + 整行的数据! 具体分布: 根节点 只包含 主键, 叶子节点包含 整行数据! 参考 05_高性能索引使用策略_聚簇索引的结构.png
+
+        创建表: 没有指定 存储引擎的类型 InnoDB 和 MyISA 均可
+            create table layout_test (
+                col1 int not null,
+                col2 int not null,
+                primary key (col1),
+                key(col2)
+            );
+
+        InnoDB 和 MyISAM 中 聚簇索引的数据结构、二级索引的数据结构! 请参考图
+
+        在 InnoDB 中 二级索引 存放了 索引列 和 主键列; 如果要通过 二级索引查找数据:
+            首先要通过 这个二级索引查找到对应的主键,  然后再通过 聚簇索引查找对应的数据行; 因此整个过程是经过两次 B-Tree 索引的查询!
+
+        聚簇索引在使用的时候的注意点:
+            插入时应尽量使用自增主键, 因为这样即符合 聚簇索引的创建顺序, 占用空间也是比较小的, 也防止了过多的节点的分裂, 一旦从之间分裂会造成大量数据的移动, 维护成本和产生碎片的可能会急剧增高!
+
+        聚簇索引在插入时可能遇到的问题:
+            AUTO_INCREMENT 会造成多个线程产生间隙锁的竞争! 这个时候就有必要调整以下 innodb_autoinc_lock_mode 值了!
+
+            具体的 innodb_autoinc_lock_mode 可以查看相关的资料, 共有3个值, 并且本人测试的是:
+
+            show variables like "innodb_autoinc_lock_mode";
+            ----------------------------------------------------
+            Variable_name	            Value
+            innodb_autoinc_lock_mode	2
+
+    覆盖索引
+        什么是覆盖索引?
+            如果一个 索引包含（或者说覆盖）所有需要查询的字段的值, 我们就称之为"覆盖索引";
+
+        目前能做 覆盖索引的 索引类型有哪些?
+            覆盖索引必须要存储索引列的值, 而哈希索引、空间索引、全文索引等 都不存储索引列的值, 所以 MySQL 只能使用B-Tree索引 做 覆盖索引!
+
+        当 explain 的 Extra 列 出现了 Using Index 就表示使用了 覆盖索引!
+
+    使用索引扫描来做排序: TODO 书中胡说八道, 只能用来作为参考!
+        创建表:
+            CREATE TABLE rental (
+              rental_id bigint NOT NULL AUTO_INCREMENT,
+              rental_date date NOT NULL,
+              inventory_id int NOT NULL,
+              customer_id int NOT NULL,
+              staff_id int NOT NULL,
+              PRIMARY KEY (rental_id),
+              UNIQUE KEY rental_date (rental_date,inventory_id,customer_id)
+            ) ENGINE=InnoDB AUTO_INCREMENT=11 DEFAULT CHARSET=utf8mb3;
+
+            --- rental_date  出租日期
+            --- inventory_id 库存ID, 
+            --- customer_id  租户Id
+            --- staff_id     员工编号
+
+        插入测试数据:
+            INSERT INTO rental VALUES (1, '2021-01-01', 1, 4, 100);
+            INSERT INTO rental VALUES (2, '2021-01-02', 3, 1, 100);
+            INSERT INTO rental VALUES (3, '2021-01-03', 2, 1, 100);
+            INSERT INTO rental VALUES (4, '2021-01-04', 1, 3, 100);
+            INSERT INTO rental VALUES (5, '2021-01-05', 1, 1, 100);
+            INSERT INTO rental VALUES (6, '2021-01-01', 5, 1, 100);
+            INSERT INTO rental VALUES (7, '2021-01-01', 2, 2, 200);
+            INSERT INTO rental VALUES (8, '2021-01-01', 3, 1, 300);
+            INSERT INTO rental VALUES (9, '2021-01-01', 5, 3, 400);
+            INSERT INTO rental VALUES (10, '2021-01-01', 4, 1, 500);
+
+        测试:
+            EXPLAIN SELECT rental_id, staff_id FROM rental WHERE rental_date = "2021-01-01" ORDER BY rental_date, inventory_id, customer_id;
+
+    压缩(前缀压缩) 索引
+        这个只是用来参考了解! MyISAM 引擎下 使用压缩索引 进行 order by asc 性能可以, 进行 order by desc 性能要慢很多倍!
+
+    重复索引 和 冗余索引
+        重复索引: 指在相同的列上 按照相同顺序, 相同类型的 索引, 应该尽量避免这种现象的出现, 作用一样没必要重复创建!
+        冗余索引: 指在相同的列上 创建不同顺序 或 不同索引类型的索引, 来满足不同查询的一种 索引创建策略!
+
+    未使用的索引:
+        一般不会遇到, 因为用不到的索引, 我们就不会创建, 除非创建 重复索引 或 冗余索引 时 造成了已有索引的无效性!
+        处理方案: 直接把 这种未使用的索引 干掉就OK了!
+
+    索引和锁:
+        在 InnoDB 中可以使用索引, 减少使用不必要的行锁! 高并发下 应尽量避免 在索引列上 使用范围查询 而锁住多个行!
+        
+        关于 InnoDB 索引和锁有一些很少有人知道的细节: InnoDB 在 二级索引上 使用共享（读）锁, 访问 主键索引 需要排他（写）锁!
+        这消除了使用覆盖索引的可能性, SELECT FOR UPDATE 比 LOCK IN SHARE MODE 或非锁定查询要慢很多!
+
+索引使用案例
+    几条使用案例给出索引列的使用建议:
+        1、范围查询列应该放在 where 的最后, 因为一旦遇到 范围查询, 后面的索引就不能使用了!
+        2、尽量避免使用多个列的 范围查询!
+        3、深度翻页查询, 举例: 通过 where id > 100000000 limit 10 之类的优化 或者 limit 100000000, 10;
+
+    范围查询的标志: 在 Explain 中 type 字段为 range
+
+维护索引
+    DBA 可以深入了解!
+
+
+-----------------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------- 第6章 查询性能优化 --------------------------------------------------------
+-----------------------------------------------------------------------------------------------------------------------------------------
+前面的章节, 已经了解了 如何创建合理的表结构和索引, 但是还远远不够 即使表结构的索引设计的再优秀, 查询写的不够好, 性能也提不上去!
+
+本章核心点:
+    MySQL是如何执行查询的?
+    优化器是如何工作的?
+    深入理解执行计划是什么东西?
+
+慢查询的基础
+    查询慢的最根本原因: 就是数据量太多, 每次查询扫描的行数 或者 获取的行数、列数 太多 造成的!
+
+    1、确认应用程序是否在检索大量超过需要的数据。这通常意味着访问了太多的行, 但有时候也可能是访问了太多的列
+    2、确认 MySQL 服务器层是否在分析大量超过需要的数据行
+
+
+重构慢查询的方式
+    只有一个原则: 拆分复杂的SQL语句 或者 拆分大批量的任务 用 limit 来实现!
+
+查询执行的基础
+    查询执行路径
+
+    客户端 和 服务器端 通信协议:
+        通信方式: 半双工通信方式!
+
+        查询状态: 使用 SHOW FULL PROCESSLIST; 命令来查看就OK了, 具体每个枚举值 参考图片!
+
+    查询缓存
+        存储结构: 是通过 Hash结构存储的, 假设 Hash 函数为 function(sql) = key, 结构为 key, sql查询结果!
+        工作过程: 一旦客户端发起查询, 首先在 查询缓冲中去命中, 一旦命中则直接从查询缓存中返回给客户端, 否则继续执行;
+
+    查询优化处理
+        语法解析器 和 预处理 过程
+            语法解析器: 将SQL 语句解析成 语法树, 并初步校验 语法正确性!
+            预处理过程: 再次判定 语法 是否正确, 并进一步做 数据库, 表, 列是否都 存在, 以及 部分的权限校验(了解)
+
+        查询优化器
+            作用: 将上面产生的 SQL 语法树 生成最优的执行计划!
+            原理: 一条SQL语法树, 有很多条执行路径; 这些执行路径 都可以得到相同的查询结果! 优化器目的就是 从这些不同的执行路径里面 挑选最优的执行路径!
+
+            MySQL 使用基于成本的优化器! 成本的单位是 查询了多少个 4K数据页! 可以通过 show status like "last_query_cost";
+
+        常见的优化类型
+
+        关联查询的执行过程
+
+        执行计划
+            查看执行计划的指令: explain sql;
+            查看优化器重构的SQL语句: show warnings;
+
+        关联查询优化
+            select f.film_id, f.title, f.release_year, a.actor_id, a.first_name, a.last_name from film f
+            inner join film_actor as fa on f.film_id = fa.film_id
+            inner join actor as a on fa.actor_id = a.actor_id;
+            show status like "last_query_cost";     -- 查看这次查询的成本: 查询了多少个 4K数据页
+
+            explain
+            select f.film_id, f.title, f.release_year, a.actor_id, a.first_name, a.last_name from film f
+            inner join film_actor as fa on f.film_id = fa.film_id
+            inner join actor as a on fa.actor_id = a.actor_id;
+            show warnings;      -- 查看优化器重构的SQL语句
+
+            -- STRAIGHT_JOIN 关键字, 按照我们自己定的顺序执行
+            select f.film_id, f.title, f.release_year, a.actor_id, a.first_name, a.last_name from film f
+            straight_join film_actor as fa on f.film_id = fa.film_id
+            straight_join actor as a on fa.actor_id = a.actor_id;
+            show status like "last_query_cost";     -- 查看本次查询的成本: 查询了多少个 4K数据页
+
+            explain
+            select f.film_id, f.title, f.release_year, a.actor_id, a.first_name, a.last_name from film f
+            straight_join film_actor as fa on f.film_id = fa.film_id
+            straight_join actor as a on fa.actor_id = a.actor_id;
+            show warnings;      -- 查看优化器重构的SQL语句
+
+        排序查询优化
+            两种排序方式:
+                老版本的两次传输排序
+                    行指针 + 排序列 ---> 根据排序列排序 ---> 再次返回表中获取相关的 列字段
+                    优点: 可以容纳更多行的排序
+                    缺点: 有两次传输, I/O开销大
+                新版本的一次传输排序
+                    整行数据       ---> 根据排序列排序 ---> 直接返回要查询的字段
+
+
+                如果在关联查询的时候进行排序:
+                    如果排序字段在第一张中, 则第一张表先进行排序, 然后在关联 直到得到想要的数据
+                    如果排序字段不在第一张, 则先进行表的关联, 最后排序!
+
+                limit 的处理:
+                    limit 是在 order by 之后进行的, 纵然 limit 一个很小的值, 其整个执行过程要 排序的行 也可能非常多(数据量很大)!
+
+    查询执行引擎
+        MySQL在执行优化的阶段, 为每张表生成了一个Handler, 执行的过程就是按照执行计划 调用 Handler API 的过程!
+        不是所有的执行任务都由 Handler 来完成, 例如一些锁表的操作或者更细粒度的锁!
+
+    返回结果给客户端
+        MySQL 将结果集返回客户端是一个增量、逐步返回的过程。例如, 我们回头看看前面的关联操作, 一旦服务器处理完最后一个关联表,
+        开始生成第一条结果时, MySQL就可以开始向客户端逐步返回结果集了
+
+查询优化器的局限性:
+    这部分作为了解, 对于拿不准 sql 语句, 可以通过 explain sql 语句后, 再执行 show warnings; 来看下优化器重构的 sql 语句!
+
+查询优化器的提示 hint(暗示的意思)
+    能不用尽量不要用, 因为在优化器面前使用 影响生成的执行计划 意义不大, 这种小聪明放在别处吧!
+
+优化特定类型的查询
+    count() 聚合函数
+
+        -- 最原始的写法: 查询 city_id > 5 的城市个数
+        select count(*) from city where city_id > 5;
+        show status like "last_query_cost";
+        explain select count(*) from city where city_id > 5;
+        show warnings;
+
+        -- 这种优化不起作用, 虽然成本低了, 但并不知道这些 4K数据页 是否连续
+        select (select count(*) from city) - count(*) from city where city_id <=5;
+        show status like "last_query_cost";
+        explain select (select count(*) from city) - count(*) from city where city_id <=5;
+        show warnings;
+
+    优化关联查询
+
+    优化 group by 查询, 这种查询是在 分组列上进行自动排序!
+
+
+
+总结:
+    对于软件员来说, 把控高性能MySQL 主要把控以下方面
+    1、慢查询基础
+    2、查询执行基础
+    3、高性能索引创建和使用策略
+    4、特定类型的优化
+    5、执行计划的使用
+
+锁的调试:
+    锁的种类分为 服务器锁 和 存储引擎锁
+
+    查看锁的状态:
+        ./mysqladmin -uroot -p -i 2 processlist
+        ./mysqladmin debug 可以查看锁的相关日志
+
+        具体可以参考官方给出的: https://dev.mysql.com/doc/refman/8.0/en/mysqladmin.html
+
+
+    服务器层的锁:
+        表锁
+        全局读锁
+        命名锁
+        用户锁也叫字符锁
+
+
+    存储引擎锁:
+    					SET AUTOCOMMIT = 0;
+    					BEGIN
+    					SELECT FILM_ID FROM FILM LIMIT 1 FOR UPDATE;
+
+
+-- 服务器层锁的锁
+		-- 1、表锁 分为 读锁和写锁, 能够显示的定义使用 和 隐式的应用
+		-- 显式表锁实验:
+				-- 窗口1:
+					LOCK TABLES film READ;
+
+				-- 窗口2:
+					LOCK TABLES film WRITE;
+
+				-- 窗口3:
+					SHOW PROCESSLIST;
+
+				-- 执行顺序: 窗口1, 窗口2, 窗口3, 窗口3给出以下的结果:
+				-- Id		User						Host						db		    Command			Time		State(对应当前执行命令的状态)				Info(执行的是哪一条命令)
+				-- 5		event_scheduler	            localhost								Daemon			763			Waiting on empty queue
+				-- 8		root						localhost:54226	            sakila	    Sleep			10
+				-- 9		root						localhost:54352	            sakila	    Query			4			Waiting for table metadata lock			LOCK TABLES film WRITE
+				-- 10		root						localhost:54354	            sakila	    Query			0			init									SHOW PROCESSLIST
+
+
+		-- 隐式表锁实验:
+				-- 窗口1:
+					SELECT SLEEP(100) FROM film LIMIT 1;
+
+				-- 窗口2:
+					LOCK TABLES film WRITE;
+
+				-- 窗口3:
+					SHOW PROCESSLIST;
+
+		-- 查看哪个线程占用锁导致的阻塞: 只有在 debug 模式下才能使用
+					-- 最新版本可以解锁 UNLOCK TABLES;
+					-- debug 模式下才能使用: mysqladmin debug;
+
+
+		-- 2、全局读锁
+		-- 使用方式: FLUSH TABLES WITH READ LOCK 或者 设置 read_only = 1来获取 单个全局读锁; 全局锁 和 其他的任何表锁都冲突!
+				-- 窗口1:
+					FLUSH TABLES WITH READ LOCK;
+
+				-- 窗口2:
+					LOCK TABLES film WRITE;
+
+				-- 窗口3:
+					SHOW PROCESSLIST;
+
+
+		-- 3、命名锁, 几乎不怎么使用
+		-- 使用方式: RENAME TABLE ole_table_name to new_table_name 时 或者 删除表时 自动触发的一种表锁!
+
+		-- 4、用户锁(锁的是 字符串, 字符串是某中资源) 几乎不怎么使用, 这里锁的是字符串 Yang
+		-- 你可以使用 GET_LOCK() 及其相关函数在 服务器级别内 锁住或释放任意一个字符串!
+		-- 窗口1:
+					SELECT GET_LOCK("Yang", 100);
+
+		-- 窗口2:
+					SELECT GET_LOCK("Yang", 100);
+
+		-- 窗口3:
+					SHOW PROCESSLIST;
+
+		-- Id	User	Host						db			Command		Time	State				Info
+		-- 63	root	localhost:57192	            sakila	    Query		4		User lock			SELECT GET_LOCK("Yang", 100)
+
+-- 存储引擎中的锁 INNODB 为主
+
+		-- 窗口1:
+					SET AUTOCOMMIT = 0;
+					BEGIN;
+					SELECT FILM_ID FROM FILM LIMIT 1 FOR UPDATE;
+
+		-- 窗口2:
+                    SET AUTOCOMMIT = 0;
+					BEGIN;
+					SELECT FILM_ID FROM FILM LIMIT 1 FOR UPDATE;
+
+		-- 窗口3:
+                    SHOW FULL PROCESSLIST;
+
+
+常见查询类型:
+    根据 last_query_cost 来看, 扫描4K数据页的 数量从少到多:
+    NULL < system < const < eq_ref < ref < range < index < all
+
+
+表锁

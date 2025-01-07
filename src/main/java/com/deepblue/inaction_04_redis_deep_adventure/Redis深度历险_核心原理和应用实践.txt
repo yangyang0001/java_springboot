@@ -1,0 +1,737 @@
+---------------------------------------------------------------------------------------------------------------------------------------------
+-------------------------------------------------------------------- 第1篇 基础和应用篇 --------------------------------------------------------
+---------------------------------------------------------------------------------------------------------------------------------------------
+单机安装Redis 请参考 Redis安装.txt
+
+Redis的5种基本数据结构
+    string (字符串)
+        最常用的方式: 使用 user_id 作为key, 然后 user 转换为 json 字符串存储结构就OK了!
+
+    list (列表)
+        类似于 基础语言中的 双向链表结构, 标志着插入和删除的速度非常快! 相当于 java 中的 LinkedList, 再深入一些是 多个 ziplist 组成的 quicklist 双向链表!
+
+    hash (字典)
+        类似于 java 中的 HashMap, 数据结构是 数组 + 链表的结构!
+
+    set  (集合)
+        类似于 java 中的 HashSet
+
+    zset (有序集合)
+
+容器类数据结构的通用规则:
+    list hash set zset 这四种数据结构属于容器类数据结构; 通用规则如下:
+
+    1、create if not exists: 插入元素时, 如果没有容器则创建新的容器
+    2、drop if no  elements: 删除元素时, 如果没有任何其他元素了, 则删除容器
+
+过期时间:
+    是针对全体对象的, 在容器类结构中举例:
+        zadd key score1 member1, score2 member2
+        expire key seconds
+
+    查看过期时间: ttl key
+
+    特别注意:
+        如果一个 string 类型的数据结构 已经设置了过期时间, 然后你调用了 set 方法修改了它, 它的过期时间会消失!
+
+        实验证明:
+            127.0.0.1:6379> set books zhangsan
+            OK
+            127.0.0.1:6379> expire books 1000
+            (integer) 1
+            127.0.0.1:6379> ttl books
+            (integer) 997
+            127.0.0.1:6379> set books java
+            OK
+            127.0.0.1:6379> ttl books
+            (integer) -1
+
+分布式锁实现:
+    set key value ex seconds nx 命令 使 setnx 和 expire 两个命令达到 串行化的原子性操作!
+    举例:
+        127.0.0.1:6379> set book:lock true ex 10 nx
+        OK
+        127.0.0.1:6379> get book:lock
+        "true"
+
+    现实中自己定义非常少, 可以参考 RedissonConfig 或者 springboot2_bloom 工程中的 ProductController
+
+    这块的伪代码非常重要, 非重入锁伪代码如下:
+        String key = "redis_lock";
+        String value = UUID.randomUUID().toString();
+
+        // 加锁成功
+        if(set(key, value, nx = true, ex = 5)) {
+            // 加锁处理业务逻辑
+            ...
+            ...
+            ...
+            // 使用完成后释放锁
+            if(delifequals(key, value)) {
+                // 删除锁成功
+            } else {
+                // 删除锁失败
+            }
+        } else {
+            // 加锁失败!
+        }
+
+
+消息队列
+    redis 中的 list 容器可以实现中的延时队列!
+    blpop 或者 brpop 来使用: 当 pop 元素为 null 时, 消费者 blocking! 这样可以避免空循环!
+    举例:
+        127.0.0.1:6379> lpush notify_queue apple banana pear orange
+        (integer) 4
+
+        127.0.0.1:6379> lrange notify_queue 0 -1
+        1) "orange"
+        2) "pear"
+        3) "banana"
+        4) "apple"
+
+        127.0.0.1:6379> brpop notify_queue 1
+        1) "notify_queue"
+        2) "apple"
+
+        127.0.0.1:6379> brpop notify_queue 1
+        1) "notify_queue"
+        2) "banana"
+
+        127.0.0.1:6379> brpop notify_queue 1
+        1) "notify_queue"
+        2) "pear"
+
+        127.0.0.1:6379> brpop notify_queue 1
+        1) "notify_queue"
+        2) "orange"
+
+        127.0.0.1:6379> brpop notify_queue 1
+        (nil)
+        (1.20s)
+
+        127.0.0.1:6379> brpop notify_queue 1
+        (nil)
+        (1.27s)
+
+位图: redis 支持这种 bit 位的数组, 就是将 byte 看成了 位数组了! (其实没有什么卵用)
+    getbit / setbit
+
+HyperLogLog
+    举例:
+        统计 PV :
+            127.0.0.1:6379> set www.google.com 0
+            OK
+            127.0.0.1:6379> get www.google.com
+            "0"
+            127.0.0.1:6379> incr www.google.com
+            (integer) 1
+            127.0.0.1:6379> get www.google.com
+            "1"
+            127.0.0.1:6379> incr www.google.com
+            (integer) 2
+            127.0.0.1:6379> incr www.google.com
+            (integer) 3
+            127.0.0.1:6379> incr www.google.com
+            (integer) 4
+            127.0.0.1:6379> incr www.google.com
+            (integer) 5
+            127.0.0.1:6379> get www.google.com
+            "5"
+
+        统计 UV :
+            pfadd
+            pfcount
+
+            举例:
+            127.0.0.1:6379> pfadd www.deep.com zhangsan zhangsan
+            (integer) 1
+            127.0.0.1:6379> pfadd www.deep.com zhangsan lisi
+            (integer) 1
+            127.0.0.1:6379> pfcount www.deep.com
+            (integer) 2
+
+
+        pfmerge 的使用:
+            使用格式:
+                pfmerge destkey sourcekey [sourcekey ...]
+
+            举例:
+                127.0.0.1:6379> pfadd www.google.com zhangsan lisi wangwu
+                (integer) 1
+                127.0.0.1:6379> pfadd www.baidu.com zhangsan lisi wangwu zhaoliu
+                (integer) 1
+                127.0.0.1:6379> pfmerge www.google.com www.baidu.com
+                OK
+                127.0.0.1:6379> pfcount www.google.com
+                (integer) 4
+
+
+布隆过滤器
+    特性: 说某个值存在时, 这个值未必存在; 说某个值不存在时, 这个值一定不存在!
+    范围: Redis 4.0 以后才有这个功能!
+    命令:
+        bf.add key value
+        bf.exists key value
+
+        bf.madd key value1 value2 ... valueN
+        bf.mexisits key value1 value2 .. valueN
+
+    举例:
+        127.0.0.1:6379> bf.add codehole user1
+        (integer) 1
+
+        127.0.0.1:6379> bf.add codehole user2
+        (integer) 1
+
+        127.0.0.1:6379> bf.add codehole user3
+        (integer) 1
+
+        127.0.0.1:6379> bf.exists codehole user1
+        (integer) 1
+
+        127.0.0.1:6379> bf.madd codehole user1 user3 user5 user7
+        1) (integer) 0
+        2) (integer) 0
+        3) (integer) 1
+        4) (integer) 1
+
+        127.0.0.1:6379> bf.mexists codehole user1 user3 user5 user7
+        1) (integer) 1
+        2) (integer) 1
+        3) (integer) 1
+        4) (integer) 1
+
+滑动窗口限制修改次数:
+    参考 滑动窗口: 设置 1天 之内修改 nickname 最多只能 5次 zset 的使用, 代码: RedisController.java 中 setNickNameWithZSet(String nickname);
+
+漏斗限流:
+    redis-cell 的使用: 它和 redisbloom 一样都是组件,都需要下载安装; 安装教程 参考: Redis安装.txt
+    使用方式: 参考 06_Redis-Cell使用方法.png
+
+    举例:
+        127.0.0.1:6379> CL.THROTTLE user123 15 1 60
+        1) (integer) 0
+        2) (integer) 16
+        3) (integer) 15
+        4) (integer) -1
+        5) (integer) 60
+
+    代码: RedisController.java 中 setNickNameWithFunnel(String nickname);
+
+GeoHash: 是 zset 的一种使用方式!
+    Redis3.2版本后 添加的地理位置Geo 模块!
+    现实中的使用: 附近的 Mobike, 附近的 餐馆
+
+    经度: [-180 到 180], 经度正负以本初子午线（英国格林尼治天文台）为界, 东正西负
+    经度: [-90  到  90], 北正南负
+
+    指令:
+    1、geoadd key longitude latitude member [longitude latitude member ...]  // 添加 member 的经纬度!
+        举例:
+            127.0.0.1:6379> geoadd company 111.0 33.0 yang
+            (integer) 1
+            127.0.0.1:6379> geoadd company 111.0 33.1 wang
+            (integer) 1
+            127.0.0.1:6379> geoadd company 111.2 33.2 lang
+            (integer) 1
+            127.0.0.1:6379> geoadd company 111.2 33.4 kang
+            (integer) 1
+
+    2、geodist key member1 member2 [unit]                                    // 计算 member1, member2 之间的距离!
+        解释:
+            unit 是距离单位, 距离单位可以是 m、 km、 mi 和 ft, 分别代表米、干米、英里和尺。
+
+        举例:
+            geodist company lang wang km        // lang 和 wang 之间的距离为 21.6932
+            "21.6932"
+
+    3、geopos key member [member ...]                                        // 获取 member 经纬度
+        举例:
+            geopos company lang
+
+
+    4、获取元素的 hash 值
+        geohash key member [member ...]
+        举例:
+            127.0.0.1:6379> GEOHASH company yang
+            1) "wmygtz7wzm0"
+            127.0.0.1:6379> GEOHASH company lang
+            1) "wmzhf7vk5b0"
+            127.0.0.1:6379> geohash company wang
+
+        可以去网站验证值: http://geohash.org/wmygtz7wzm0 可得到 相关的经纬度!
+
+    5、查找附近的公司
+        格式:
+            // 根据 key member 来查看附近的
+            georadiusbymember key member radius m|km|ft|mi [WITHCOORD] [WITHDIST] [WITHHASH] [COUNT count] [ASC|DESC] [STORE key] [STOREDIST key]
+            // 根据 key 和 经纬度 来查找附近的
+            georadius key longitude latitude radius m|km|ft|mi [WITHCOORD] [WITHDIST] [WITHHASH] [COUNT count] [ASC|DESC] [STORE key] [STOREDIST key]
+
+        可选参数:
+            [WITHCOORD] : 获取经纬度
+            [WITHDIST]  : 显示距离
+            [WITHHASH]  : 显示内部存储的hash值, 非 geohash 获取的那个, 不是一个东西!
+
+        举例:
+            // 范围 200 km 以内最多 3个元素, 按距离升序排列, 结果不会排除自身!
+            georadiusbymember company yang 200 km WITHCOORD WITHDIST WITHHASH count 3 asc
+
+            // 范围 200 km 以内最多 3个元素, 按距离降序排列, 结果不会排除自身!
+            georadiusbymember company yang 200 km count 3 desc
+
+            127.0.0.1:6379> georadiusbymember company yang 200 km count 3 desc
+            1) "kang"
+            2) "lang"
+            3) "wang"
+
+            127.0.0.1:6379> georadiusbymember company yang 200 km count 3 asc
+            1) "yang"
+            2) "wang"
+            3) "lang"
+
+            // 加上三个参数看一下返回格式!
+            127.0.0.1:6379> georadiusbymember company yang 200 km WITHCOORD WITHDIST WITHHASH count 3 asc
+            1) 1) "yang"
+               2) "0.0000"                      // 距离
+               3) (integer) 4040287794663135    // 存储的hash值
+               4) 1) "110.99999874830245972"    // 经纬度
+                  2) "32.99999989476653894"
+            2) 1) "wang"
+               2) "11.1226"
+               3) (integer) 4040291213286095
+               4) 1) "110.99999874830245972"
+                  2) "33.0999997139447828"
+            3) 1) "lang"
+               2) "29.0194"
+               3) (integer) 4040385021228733
+               4) 1) "111.2000003457069397"
+                  2) "33.19999953312302665"
+
+    注意: 在 特别发达的城市中定位人群时, 数据量会特别大,不建议在集群中存放, 最好用单一的服务存放; redis建议 一个 key  对应的数据量尽量不要超过 1M!
+
+scan
+    产生的背景:
+        1、因为 redis 是单线程的, 因此在使用 keys * 的时候, 如果key 有上百万个, 上千万个 这会阻塞其他线程的执行!
+        2、keys 没有 limit 之类的操作!
+
+    格式:
+        scan cursor [MATCH pattern] [COUNT count]
+
+    举例:
+        127.0.0.1:6379> set key0 111
+        OK
+        127.0.0.1:6379> set key1 111
+        OK
+        127.0.0.1:6379> set key2 222
+        OK
+        127.0.0.1:6379> set key3 333
+        OK
+        127.0.0.1:6379> set key4 444
+        OK
+        127.0.0.1:6379> set key5 555
+        OK
+
+
+        127.0.0.1:6379> scan 0 match key* count 3
+        1) "20"
+        2) (empty list or set)
+
+        127.0.0.1:6379> scan 20 match key* count 3
+        1) "1"
+        2) 1) "key4"
+
+        127.0.0.1:6379> scan 1 match key* count 3
+        1) "13"
+        2) 1) "key1"
+
+        127.0.0.1:6379> scan 13 match key* count 3
+        1) "11"
+        2) 1) "key0"
+           2) "key2"
+
+        127.0.0.1:6379> scan 11 match key* count 3
+        1) "31"
+        2) 1) "key3"
+           2) "key5"
+
+        127.0.0.1:6379> scan 31 match key* count 3
+        1) "0"
+        2) (empty list or set)
+
+
+大key的扫描
+    特别注意: 在 Redis 的使用中, 禁止使用太大太长的 key;
+
+    如何扫描最大的key?
+    [root@localhost bin]# ./redis-cli -h 127.0.0.1 -p 6379 -a root --bigkeys -i 0.1
+    Warning: Using a password with '-a' or '-u' option on the command line interface may not be safe.
+
+    # 扫描整个键空间以找到最大的键以及每种键类型的平均大小。
+    # Scanning the entire keyspace to find biggest keys as well as average sizes per key type.
+
+    # 你可以使用 -i 0.1 每 100 个 SCAN 命令休眠 0.1 秒（通常不需要）。
+    # You can use -i 0.1 to sleep 0.1 sec per 100 SCAN commands (not usually needed).
+
+    Unknown type 'MBbloom--' for key 'codehole'
+
+
+---------------------------------------------------------------------------------------------------------------------------------------------
+----------------------------------------------------------------------- 第2篇 原理篇 ---------------------------------------------------------
+---------------------------------------------------------------------------------------------------------------------------------------------
+Redis 是个单线程程序, 类似的 Nginx, Node.js 也是单线程的, Redis 是将所有的数据存储在内存中的, 单节点的访问量理论上可以到达 10万 QPS
+
+非阻塞IO
+    事件主要包含三种:
+        读事件 read_event, 写事件: write_event, 接收事件 accept_event; 这些统称为 事件 event;
+
+    多路复用的伪代码如下:
+
+        event = select(read_fds, write_fds, accept_fds);    // 获取 事件
+
+        for event is accept                                 // 处理 accept_event
+            handle_accept(accept_event);
+
+        for event is read_event                             // 处理 read_event
+            handle_read(read_event);
+
+        for event is write_event                            // 处理 write_event
+            handle_write(write_event);
+
+        handle_others(event);                               // 处理 其他事件
+
+    多路复用的模型: 参考 java_netty 和 01_Redis多路复用模式.png
+
+
+持久化
+    Redis的数据都是存储在 内存中的, 一旦出现 宕机问题非常恐怖, 这就要求必须要有持久化的功能, Redis提供了两种持久化的模式!
+
+    快照模式: 是一种内存数据的二进制序列化文件存储!
+    AOF模式: 是一种指令的追加文件!
+
+    快照原理:
+        Redis 使用 系统的 copy on write 功能完成来完成高并发下的 快照持久化!
+    为什么叫快照:
+        假设 线程I 对 4K数据页 A 的数据进行修改, 这个时间点产生一个 数据页A的 副本 数据页B, 数据页B 是不会变的, Redis持久化 子进程 对 数据页B 进行遍历持久化,
+        父进程继续使用 数据页A 进行维持对线程I的读写操作, 因为 数据页B是不会变的, 所以叫快照持久化!
+
+    AOF原理:
+        文件中存放 追加的内存数据操作指令, 这个指令是先执行 然后再持久化到文件中! 这有可能造成数据的丢失, 所以有 fsync 的机制, 多长时间 进行持久化一次!
+
+    AOF文件的瘦身或者重写, 是维护AOF文件的主要手段!
+
+管道
+    管道的本质: 管道不是服务端的提供的特性, 是客户端的特性, 是减少IO开销的命令重排序;
+
+事务
+    关系型数据库为了支持多个指令的原子性操作 都提供了事务的概念, redis 同样也支持事务操作!
+
+    关系型数据库事务的常用方式:
+        begin   : 开始操作
+        commit  : 提交操作
+        rollback: 回滚操作
+
+    Redis 事务常用的指令: 多个指令执行, 一旦中间的指令执行失败, 同一个事务中后面的指令还会继续执行, redis 的事务根本不具备原子性!
+        multi  : 事务的开始
+        exec   : 事务的执行
+        discard: 事务的丢弃, 这个命令必须在 exec 执行之前使用, 目的是清除 当前事务对应的 指令队列中的 指令!
+
+        举例:
+            127.0.0.1:6379> multi
+            OK
+
+            127.0.0.1:6379> set books hotspot
+            QUEUED
+
+            127.0.0.1:6379> incr books
+            QUEUED
+
+            127.0.0.1:6379> set nosql redis
+            QUEUED
+
+            127.0.0.1:6379> incr nosql
+            QUEUED
+
+            127.0.0.1:6379> exec
+            1) OK
+            2) (error) ERR value is not an integer or out of range
+            3) OK
+            4) (error) ERR value is not an integer or out of range
+
+            // 经验证 redis 事务不具有原子性 (中间出错, 后面的指令照样执行)
+            127.0.0.1:6379> get books
+            "hotspot"
+            127.0.0.1:6379> get nosql
+            "redis"
+
+        discard 举例:
+            127.0.0.1:6379> get books
+            (nil)
+
+            127.0.0.1:6379> get nosql
+            (nil)
+
+            127.0.0.1:6379> multi
+            OK
+
+            127.0.0.1:6379> incr books
+            QUEUED
+
+            127.0.0.1:6379> incr nosql
+            QUEUED
+
+            127.0.0.1:6379> discard
+            OK
+
+            127.0.0.1:6379> get books
+            (nil)
+
+            127.0.0.1:6379> get nosql
+            (nil)
+
+watch key: 类似于 mysql 中的乐观锁!
+    举例:
+    执行顺序如下:
+        窗口1:
+            127.0.0.1:6379> watch books
+            OK
+
+        窗口2:
+            127.0.0.1:6379> multi
+            OK
+            127.0.0.1:6379> incr books
+            QUEUED
+            127.0.0.1:6379> exec
+            1) (integer) 1
+
+        窗口1:
+            127.0.0.1:6379> multi
+            OK
+            127.0.0.1:6379> incr books
+            QUEUED
+            127.0.0.1:6379> exec
+            (nil)
+
+    结论:
+        1、线程A 执行 watch 类似于乐观锁的 select * from where id = XXX; 获取得到当前记录的 versionA!
+        2、一旦 线程B 在上面的 watch 命令后 发生修改操作, key 的 versionA 就会 变化为 versionB;
+        3、线程A 再执行其他的修改操作 都会返回 null;
+
+PubSub 放弃掉, 相比较优秀的 发送订阅 消息队列, redis 还是相差不少的! kafka, rabbitmq
+
+内存回收机制:
+    TODO flushdb 会清除掉所有的key; 这个在工作中要禁止使用! 内存的回收靠 Redis 自身实现就OK了!
+
+
+---------------------------------------------------------------------------------------------------------------------------------------------
+----------------------------------------------------------------------- 第3篇 集群篇 ---------------------------------------------------------
+---------------------------------------------------------------------------------------------------------------------------------------------
+基础部分:
+    CAP原理, 分布式的理论基石, 类似物理学的 牛顿三定律, 爱因斯坦的相对论!
+    C : Consistent            一致性
+    A : Availability          可用性
+    P : Partition tolerance   分区容忍性
+
+    一句话: 当产生网络分区时, 一致性和可用性很难两全!
+
+主从同步:
+    增量同步: 一种环状结构, 内部存放主节点修改数据的指令, 这个环状结构是循环利用的, 因此在 宕机的时候 可能产生指令的覆盖, 从而造成主从数据的不一致!
+    快照同步: RDB的方式, 主节点的 rdb 文件同步到从节点上, 然后从节点清空缓存, 最后加载同步过来的rdb文件! 这种操作比较消耗资源!
+
+    增加从节点: 首先进行一次 快照同步, 然后再进行 增量同步!
+
+    使用指令: wait 
+        wait 提供两个参数, 第一个参数是从节点的数量 N, 第二个参数是时间 t,  以毫秒为单位;
+        两个参数的含义是: 等待 wait 指令之前的所有写操作同步到 N 个从节点 (也就是确保 N 个从节点的同步没有滞后),
+        最多等待时间 t, 如果时间 t = 0, 表示无限等待直到 N 个从节点同步完成;
+
+        假设此时出现了网络分区, wait 指令第二个参数时间 t = 0, 主从同步无法继续进行,  wait 指令会永远阻塞,  Redis 服务器将丧失可用性
+
+主从同步功能使用说明
+    复制功能也不是必需的, 如果你只用 Redis 做缓存, 跟 memcache 一样对待, 也就不需要从节点做备份, 挂掉了重新启动一下就行
+    但是只要你使用了 Redis 的持久化功能, 就必须认真对待主从复制, 它是系统数据安全的基础保障!
+
+主从同步中动态选择 master 节点机制: 哨兵机制! sentinel 机制, 搭建主从集群+哨兵选取master 参考 主从模式加哨兵机制安装.txt
+
+分而治之codis
+    单个redis的内存不宜过大, 否则会造成持久化文件过大;
+    从 redis 到 cluster 之间有很长一段时间, 这段时间 codis 代理中间件应运而生!
+
+    codis 是一种无状态的代理中间件!
+
+    codis 分片原理:
+        hash  = crc32(command.key);
+        slot  = hash / 1024;
+
+        slot 数可以自动调整, 默认的为 1024个槽!
+
+    codis 安装! 因为之前安装过, 这里就不做详细介绍了, 又因 codis 只是 redis cluster 之前的一种 中间产物, 安装教程就参考以前的文档!
+
+    codis 缺点: 因为是采用 hash / 1024 的算法, key 可能存在于不同的 redis 实例中, 所以不支持事务! 其实 redis 事务也不起什么作用!
+
+cluster 集群 参考 RedisCluster安装.txt
+    cluster 分片原理:
+        hash = crc16(command.key);
+        slot = hash / 16384;
+
+    cluster 集群中的 master 节点最少是3个, 一般现实中使用为 3主3从, 3主6从;
+
+
+---------------------------------------------------------------------------------------------------------------------------------------------
+----------------------------------------------------------------------- 第4篇 拓展篇 ---------------------------------------------------------
+---------------------------------------------------------------------------------------------------------------------------------------------
+Stream 消息队列: 借鉴的Kafka!
+
+info 查看当前 Redis 状态的命令! 指令模块可以查看 01_Redis信息查看指令.png 参考 01_Redis举例如下:
+    1、查看服务器信息
+        info server
+
+        127.0.0.1:6179> info server
+        # Server
+        redis_version:5.0.0
+        redis_git_sha1:00000000
+        redis_git_dirty:0
+        redis_build_id:6c9fefb074ac6c06
+        redis_mode:cluster
+        os:Linux 3.10.0-1127.el7.x86_64 x86_64
+        arch_bits:64
+        multiplexing_api:epoll
+        atomicvar_api:atomic-builtin
+        gcc_version:4.8.5
+        process_id:1505
+        run_id:f6fbb60c79ef534fd35d0aa7c17d8032bf204fd9
+        tcp_port:6179
+        uptime_in_seconds:56183
+        uptime_in_days:0
+        hz:10
+        configured_hz:10
+        lru_clock:658699
+        executable:/home/redis/bin/./redis-server
+        config_file:/home/redis/6179/redis_6179.conf
+
+    2、查看客户端连接信息
+        info clients
+
+        [root@localhost bin]# /home/redis/bin/redis-cli -a root info clients
+        Warning: Using a password with '-a' or '-u' option on the command line interface may not be safe.
+        # Clients
+        connected_clients:1
+        client_recent_max_input_buffer:2
+        client_recent_max_output_buffer:0
+        blocked_clients:0
+
+    3、查看内存情况
+        info memory
+
+        127.0.0.1:6179> info memory
+        # Memory
+        used_memory:2657016
+        used_memory_human:2.53M
+        used_memory_rss:10649600
+        used_memory_rss_human:10.16M
+        used_memory_peak:2677856
+        used_memory_peak_human:2.55M
+        used_memory_peak_perc:99.22%
+        used_memory_overhead:2578336
+        used_memory_startup:1462976
+        used_memory_dataset:78680
+        used_memory_dataset_perc:6.59%
+        allocator_allocated:2665832
+        allocator_active:2875392
+        allocator_resident:11137024
+        total_system_memory:1907752960
+        total_system_memory_human:1.78G
+        used_memory_lua:37888
+        used_memory_lua_human:37.00K
+        used_memory_scripts:0
+        used_memory_scripts_human:0B
+        number_of_cached_scripts:0
+        maxmemory:0
+        maxmemory_human:0B
+        maxmemory_policy:noeviction
+        allocator_frag_ratio:1.08
+        allocator_frag_bytes:209560
+        allocator_rss_ratio:3.87
+        allocator_rss_bytes:8261632
+        rss_overhead_ratio:0.96
+        rss_overhead_bytes:18446744073709064192
+        mem_fragmentation_ratio:4.07
+        mem_fragmentation_bytes:8033600
+        mem_not_counted_for_evict:0
+        mem_replication_backlog:1048576
+        mem_clients_slaves:16914
+        mem_clients_normal:49686
+        mem_aof_buffer:0
+        mem_allocator:jemalloc-5.1.0
+        active_defrag_running:0
+        lazyfree_pending_objects:0
+
+    4、查看当前状态 info stats
+
+        [root@localhost bin]# /home/redis/bin/redis-cli -a root info stats
+        Warning: Using a password with '-a' or '-u' option on the command line interface may not be safe.
+        # Stats
+        total_connections_received:16
+        total_commands_processed:12420
+        instantaneous_ops_per_sec:1
+        total_net_input_bytes:464125
+        total_net_output_bytes:48102
+        instantaneous_input_kbps:0.04
+        instantaneous_output_kbps:0.00
+        rejected_connections:0
+        sync_full:2
+        sync_partial_ok:3
+        sync_partial_err:2
+        expired_keys:0
+        expired_stale_perc:0.00
+        expired_time_cap_reached_count:0
+        evicted_keys:0
+        keyspace_hits:0
+        keyspace_misses:0
+        pubsub_channels:0
+        pubsub_patterns:0
+        latest_fork_usec:753
+        migrate_cached_sockets:0
+        slave_expires_tracked_keys:0
+        active_defrag_hits:0
+        active_defrag_misses:0
+        active_defrag_key_hits:0
+        active_defrag_key_misses:0
+
+
+过期策略
+    主节点采用的是 设置了过期时间的 key集合, 每秒执行10次的遍历; 每次执行不能超过25ms!
+
+    懒惰策略回收
+        (1) 每次从 设置了过期时间的key集合中 获取20个key;
+        (2) 删除已经过期的key
+        (3) 如果这20个key中有 超过了1/4的都过期了, 则重新执行 (1)
+
+
+    从节点的过期策略: 从节点是不执行过期策略的, 主节点发送 del 指令 进行同步!
+
+LRU 算法:
+    当实际内存超出 maxmemory 时, redis 提供了两种针对策略, 这些针对策略有分为 不同6种不同的形式!
+
+    针对有过期时间的 key 集合 这 针对所有的 key 集合!
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

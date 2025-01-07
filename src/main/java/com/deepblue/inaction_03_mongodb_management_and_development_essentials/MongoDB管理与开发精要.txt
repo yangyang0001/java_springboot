@@ -1,0 +1,636 @@
+---------------------------------------------------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------- 第2章 快速入门 ---------------------------------------------------------
+---------------------------------------------------------------------------------------------------------------------------------------------
+数据逻辑结构:
+
+    文档 document, 集合 collection, 数据库 database
+
+    database   相当于  MySQL 中的 数据库!
+    collection 相当于  MySQL 中的 表!
+    document   相当于  MySQL 中的 行!
+
+MongoDB中的各种文件: 命名空间文件 和 数据文件!
+    每个数据库都有 一个.ns文件和一些数据文件! 每个数据文件都是前一个数据文件的2倍, 且每个数据文件 最大不能超过2G!
+    每张表也有自己的命令空间, 每个索引也有自己的命令空间, 这些命令空间都在 .ns 文件中存放!
+
+MongoDB 中的四种日志
+    1、系统日志
+        使用命令: mongod --logpath=/home/mongodb-linux-x86_64-rhel70-5.0.5/logs/mongodb.log --logappend
+
+    2、Journal日志
+        使用命令: mongod -journal
+
+    3、oplog主从日志 单位 (MB)
+        使用命令: 启动时配置大小 mongod -oplogSize=1024
+
+    4、慢查询日志
+        配置超过5秒的查询命令: mongod --profile=1 --slowms=5
+        可以查看 db.system.profile 文件来查看慢查询日志
+
+元数据的存储
+    dbname.system.* 文件里面存放
+
+数据类型: json格式数据! 数据类型有很多限制!
+
+mongodb 默认的端口为: 27017
+
+操作数据库:
+    使用数据库
+        use mydb;
+
+    插入数据
+        j = {name : "mongodb"}
+        db.things.save(j);
+
+    查询数据
+        db.things.find();
+        db.things.find({_id : 1});
+        db.things.findOne({_id : 1});
+
+管理MongoDB 的GUI
+    MongoVUE
+    RockMongo
+    MongoHub
+
+    Robo 3T 本人使用
+    具体连接过程:
+        首先填写 SSH 中的连接, 目的为连接上 Linux
+        再次填写 Connection 中的连接 直接填写 127.0.0.1 和 端口 27017 就OK了
+
+
+---------------------------------------------------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------- 第3章 高级查询 ---------------------------------------------------------
+---------------------------------------------------------------------------------------------------------------------------------------------
+MongoDB 解决的不是高并发的读写问题, 而是解决的海量数据的读取操作!
+
+查询操作
+    1、比较操作符 < <= = >= > !=
+        $gt     表示 >
+        $lt     表示 <
+        $eq     表示 =
+        $gte    表示 >=
+        $lte    表示 <=
+        $ne     表示 !=
+
+        db.things.find({_id: {$eq : 1}});
+
+        多个比较条件使用的逗号分隔
+            举例: db.things.find({_id: {$gt : 0, $lt : 2}});
+
+    2、$all 匹配所有
+        db.things.find({_id : {$all : [0, 1]}});
+
+        对比MySQL 中 IN() :
+            MySQL 中的 IN()   : 表示满足集合中的任意一个就可以查询出来
+            Mongo 中的 $all() : 表示要满足集合中的所有元素才可以查询出来
+
+    3、$in 匹配集合中的任意一个
+        db.things.find({age : {$in : [1, 2, 10, null]}});
+
+    4、查询是否存在某个字段的记录 $exists
+        db.things.find({_id : {exists : true}});
+
+    5、null值处理 在 mongodb 5.0.5 中已经可以使用了!
+        db.things.find({age : null});
+
+    6、$mod 取模运算 age mod 9 = 1 的数据
+        db.things.find({age : {$mod : [9, 1]}});
+
+    7、$size 匹配数组中的元素个数
+        var j = {_id : 3, name: "wangwu", hobbies : ["football", "basketball", "volleyball"]};
+        db.things.save(j);
+
+        var j = {_id : 4, name: "zhaoliu", hobbies : ["xiangqi", "puke"]};
+        db.things.save(j);
+
+        db.things.find({hobbies: {$size: 2}});
+
+    8、统计count 个数
+        db.things.find().count();
+
+    9、skip 返回列表时, 跳过的条数
+        db.things.find().skip(2);
+        // 查询跳过2条 并限制 只返回一条数据
+        db.things.find().skip(2).limit(1);
+        // 限制后的数量 count() 中填写 true
+        db.things.find().skip(1).limit(5).count(true);
+
+    10、sort 排序
+        // 升序
+        db.things.find().sort({age: 1});
+        // 降序
+        db.things.find().sort({age: -1});
+
+    11、distinct("column_name") 这个操作在数据量非常大时, 非常耗时!
+        db.things.distinct("name");
+
+    12、group 分组统计 这里讲解的不清晰
+        db.things.aggregate([{$group : {_id : "$name", age : {$avg : "$age"}}}]);
+        db.things.aggregate([{$group : {_id : "$name", age : {$min : "$age"}}}])
+
+
+查询语法:
+    数组内容的查询:
+        db.things.find({hobbies: "football"});
+
+    内嵌文档查询:
+        当前记录中有一列 包含了不是一个字段的值, 这条记录就叫内嵌文档!
+        var j = {_id : 6, name: "zhangsan",  age: 22, hobbies : ["xiangqi", "puke"], author: {name : "yang", age : 30}};
+        db.things.save(j);
+        内嵌文档查询如下:
+        db.things.find({"author.name" : "yang"})
+
+    正则表达式匹配:
+        db.things.find({name : {$not : /^z.*/}});
+
+
+    $where 条件查询:
+        db.things.find({age : {$gt : 10}});
+
+联合查询:
+    MongoDB 不建议使用 关联查询, 除非没有办法
+
+游标和存储过程:
+
+    后两者使用 shell 语言太过麻烦, 转为 java 语言后再次使用一次!
+
+---------------------------------------------------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------- 第4章 高级更新 ---------------------------------------------------------
+---------------------------------------------------------------------------------------------------------------------------------------------
+数据更新命令
+    update 命令
+    save 命令
+
+数据更新操作符
+    1、$inc 自增某个字段的值
+        db.things.update({_id : 1}, {$inc : {age : 10}});
+
+    2、$set 设置某个字段的值
+        db.things.update({_id : 2}, {$set : {age : 11}});
+
+    3、$unset 删除某个字段
+        db.things.update({_id : 2}, {$unset : {age : 1}});
+
+    4、$push 往某个数组字段里面添加元素
+        案例: hobbies 必须是数组字段
+            db.things.update({_id : 4}, {$push : {hobbies : "music"}});
+
+    5、$pushAll 在 mongodb 5.0.5 中 不支持
+
+    6、$addToSet 往数组集合中添加元素, 如果存在则不添加
+        db.things.update({_id : 4}, {$addToSet : {hobbies : "a"}});
+
+    7、$pop 删除数组中的 第一个元素 或者 最后一个元素
+        删除最后一个元素: field : 1
+        db.things.update({_id : 4}, {$pop : {hobbies : 1}});
+        删除第一个元素: field : -1
+        db.things.update({_id : 4}, {$pop : {hobbies : -1}});
+
+    8、$pull 删除数组中的 所有等于某个值的元素
+        db.things.update({_id : 4}, {$pull : {hobbies : "music"}});
+
+    9、$pullAll 删除数组中的 等于某个集合中任意的元素
+        db.things.update({_id : 4}, {$pullAll : {hobbies : ["aaa", "music"]}});
+
+    10、$rename 重命名某个字段
+        db.things.update({_id : 4}, {$rename : {age : "new_age"}});
+
+---------------------------------------------------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------- 第5章 高级特性 ---------------------------------------------------------
+---------------------------------------------------------------------------------------------------------------------------------------------
+Capped Collection 集合: 一种固定容量的 插入时如果满了, 则丢弃 最近最少使用的 元素!
+    创建 Capped Collection 集合
+        db.createCollection("mine_capped_collection", {capped : true, size: 100000000});
+        db.mine_capped_collection.isCapped();
+        db.mine_capped_collection.validate();
+
+    建议: 如果 capped collection 写入操作比读取操作 更多, 不建议使用索引, 因为 这样插入速度将 从 log speed 降为 database speed!
+
+GridFS 规范
+    GridFS 规范一种 将大型文件 存储到 MongoDB 中的一种规范!
+    mongofiles 命令在 mongodb 5.0.5 中已经不存在了!
+
+MapReduce 编程模型
+    db.students.insert({classid : 1, age : 14, name : "Tom"});
+    db.students.insert({classid : 1, age : 12, name : "Jacky"});
+    db.students.insert({classid : 2, age : 16, name : "Lily"});
+    db.students.insert({classid : 2, age : 9,  name : "Tony"});
+    db.students.insert({classid : 2, age : 19, name : "Harry"});
+    db.students.insert({classid : 2, age : 13, name : "Vincent"});
+    db.students.insert({classid : 1, age : 14, name : "Bill"});
+    db.students.insert({classid : 2, age : 17, name : "Bruce"});
+
+    // 根据 classid 分组, 统计当前分组的 平均age
+    db.students.mapReduce(
+        function() { emit(this.classid, this.age);},
+        function(key,values) {
+            return Array.avg(values)
+        },
+        {
+           out : "avg_age"
+        }
+    );
+    db.avg_age.find();
+
+    // 根据 classid 分组, 统计当前分组的 age和
+    db.students.mapReduce(
+        function() { emit(this.classid, this.age); },
+        function(key, values) {return Array.sum(values)},
+          {
+             out: "sum_age",
+             sort: {classid : -1}
+          }
+    );
+    db.sum_age.find();
+
+MapReduce 可以用以下更好用的 aggregate 代替:
+
+    // 根据 classid 和 name 进行分组, 统计当前分组的 平均age
+    db.students.aggregate([{$group : {_id : ["$classid", "$name"], age : {$avg : "$age"}}}]);
+
+    // 根据 classid 分组, 统计当前分组的 平均age
+    db.students.aggregate([{$group : {_id : "$classid", age : {$avg : "$age"}}}]);
+
+    // 根据 classid 分组, 统计当前分组的 age和
+    db.students.aggregate([{$group : {_id : "$classid", age : {$sum : "$age"}}}]);
+
+---------------------------------------------------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------- 第8章 访问控制 ---------------------------------------------------------
+---------------------------------------------------------------------------------------------------------------------------------------------
+
+
+// 创建一个 用户管理员用户
+use admin
+db.createUser({user : "root", pwd : "Yang199001", roles : [{role:"root", db : "admin"}]});
+
+// 创建单个数据库用户
+use mydb
+db.createUser({ user: "yangyang", pwd: "123456", roles: [{ role: "readWrite", db: "mydb"}]})
+
+user  : 用户名
+pwd   : 密码
+db    : 指定该用户的数据库, admin是用于权限控制的数据库, 如果没有需要新建一个
+roles : 指定用户的角色, 可以用一个空数组给新用户设定空角色；在roles字段,可以指定内置角色和用户定义的角色。role里的角色可以选 :
+
+Built-In Roles (内置角色) :
+    1、数据库用户角色 : read、readWrite;
+    2、数据库管理角色 : dbAdmin、dbOwner、userAdmin；
+    3、集群管理角色 : clusterAdmin、clusterManager、clusterMonitor、hostManager；
+    4、备份恢复角色 : backup、restore；
+    5、所有数据库角色 : readAnyDatabase、readWriteAnyDatabase、userAdminAnyDatabase、dbAdminAnyDatabase
+    6、超级用户角色 : root
+    // 这里还有几个角色间接或直接提供了系统超级用户的访问 (dbOwner 、userAdmin、userAdminAnyDatabase)
+    7、内部角色 : __system
+
+具体角色的功能
+    Read : 允许用户读取指定数据库
+    readWrite : 允许用户读写指定数据库
+    dbAdmin : 允许用户在指定数据库中执行管理函数, 如索引创建、删除, 查看统计或访问system.profile
+    userAdmin : 允许用户向system.users集合写入, 可以找指定数据库里创建、删除和管理用户
+    clusterAdmin : 只在admin数据库中可用, 赋予用户所有分片和复制集相关函数的管理权限
+    readAnyDatabase : 只在admin数据库中可用, 赋予用户所有数据库的读权限
+    readWriteAnyDatabase : 只在admin数据库中可用, 赋予用户所有数据库的读写权限
+    userAdminAnyDatabase : 只在admin数据库中可用, 赋予用户所有数据库的userAdmin权限
+    dbAdminAnyDatabase : 只在admin数据库中可用, 赋予用户所有数据库的dbAdmin权限
+    root : 只在admin数据库中可用, 超级账号, 超级权限
+
+
+查看所有用户列表:
+    use admin
+
+验证用户权限
+    db.auth("root", "Yang199001");
+
+---------------------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------- 第9章 索引及优化 --------------------------------------------------------
+---------------------------------------------------------------------------------------------------------------------------------------------
+MongoDB 默认创建 _id_ 索引, 类似于 MySQL 中的主键索引!
+
+索引: 是对数据库中表的一列或者多列的值进行排序的一种数据结构!
+
+索引操作
+    索引基础
+        创建索引
+            db.things.ensureIndex({age : 1});
+
+        查询索引
+            db.things.getIndexes();
+            // 查询结果如下:
+            [
+                {
+                    "v" : 2,            // 版本
+                    "key" : {
+                        "_id" : 1       // 创建索引的列  1: 表示升序, -1: 表示降序
+                    },
+                    "name" : "_id_"     // 索引名称
+                },
+                {
+                    "v" : 2,
+                    "key" : {
+                        "age" : 1.0
+                    },
+                    "name" : "age_1",
+                    "background" : true // 是否是静默方式创建的索引 true: 是, false: 否!
+                }
+            ]
+
+        删除索引
+            删除表中的所有索引: db.things.dropIndexes();
+            删除表中特定的索引: db.things.dropIndex({age : 1}); 或者使用 db.things.dropIndex({age : 1}, {background : true});
+
+        重建表的索引
+            db.things.reIndex();
+
+    静默方式创建索引, 创建索引会导致阻塞, 直到创建索引完毕才能执行 当前表的读写操作!
+        db.things.ensureIndex(
+            {age : 1},
+            {background : true}
+        );
+
+    文档索引
+        db.factories.insert({new : "ww1", addr : {city : "Beijing", state : "BJ"}});
+        db.factories.insert({new : "ww2", addr : {city : "Shanghai", state : "SH"}});
+        db.factories.insert({new : "ww3", addr : {city : "Tianjin", state : "TJ"}});
+        db.factories.insert({new : "ww4", addr : {city : "Chongqing", state : "CQ"}});
+
+        创建方式
+            db.factories.ensureIndex({addr : 1});
+
+        使用场景: 只有查询的内容 和 列中内容一致, 才能用到索引, 否则用不到索引, 因为这里的索引用的是等值比价!
+
+        以下的使用方式才能使文档索引发挥作用:
+        db.factories.find({addr : {city : "Beijing", state : "BJ"}});
+
+
+    组合索引
+        创建方式
+            db.factories.ensureIndex({"addr.city" : 1, "addr.state" : 1}, {background : true});
+
+        使用场景: 只有最左匹配时才能使用到, 否则不起作用!
+
+        以下的都可以用到这种联合索引或者组合索引
+            db.factories.find({addr : {city : "Beijing", state : "BJ"}});
+            db.factories.find({addr : {city : "Beijing"}});
+            db.factories.find().sort({"addr.city" : 1, "addr.state" : 1});
+
+    唯一索引
+        db.unique_table.insert({firstname : "yang", lastname: "yang"});
+        db.unique_table.insert({firstname : "wang", lastname: "hong"});
+        db.unique_table.insert({firstname : "wang", lastname: "li"});
+
+        // 创建方式
+        db.unique_table.ensureIndex({firstname : 1, lastname : 1}, {unique : true});
+
+    强制使用索引
+
+
+    explain 查看执行计划
+        使用方式:
+        db.things.find({age : {$gt : 30}}).explain();
+
+        // 执行结果:
+        {
+            "explainVersion" : "1",
+            "queryPlanner" : {
+                "namespace" : "mydb.things",
+                "indexFilterSet" : false,
+                "parsedQuery" : {
+                    "age" : {
+                        "$gt" : 30.0
+                    }
+                },
+                "queryHash" : "4BB283C4",
+                "planCacheKey" : "7CE58451",
+                "maxIndexedOrSolutionsReached" : false,
+                "maxIndexedAndSolutionsReached" : false,
+                "maxScansToExplodeReached" : false,
+                "winningPlan" : {
+                    "stage" : "FETCH",
+                    "inputStage" : {
+                        "stage" : "IXSCAN",
+                        "keyPattern" : {
+                            "age" : 1.0
+                        },
+                        "indexName" : "age_1",
+                        "isMultiKey" : false,
+                        "multiKeyPaths" : {
+                            "age" : []
+                        },
+                        "isUnique" : false,
+                        "isSparse" : false,
+                        "isPartial" : false,
+                        "indexVersion" : 2,
+                        "direction" : "forward",
+                        "indexBounds" : {
+                            "age" : [
+                                "(30.0, inf.0]"
+                            ]
+                        }
+                    }
+                },
+                "rejectedPlans" : []
+            },
+            "command" : {
+                "find" : "things",
+                "filter" : {
+                    "age" : {
+                        "$gt" : 30.0
+                    }
+                },
+                "$db" : "mydb"
+            },
+            "serverInfo" : {
+                "host" : "localhost.localdomain",
+                "port" : 27017,
+                "version" : "5.0.5",
+                "gitVersion" : "d65fd89df3fc039b5c55933c0f71d647a54510ae"
+            },
+            "serverParameters" : {
+                "internalQueryFacetBufferSizeBytes" : 104857600,
+                "internalQueryFacetMaxOutputDocSizeBytes" : 104857600,
+                "internalLookupStageIntermediateDocumentMaxSizeBytes" : 104857600,
+                "internalDocumentSourceGroupMaxMemoryBytes" : 104857600,
+                "internalQueryMaxBlockingSortMemoryUsageBytes" : 104857600,
+                "internalQueryProhibitBlockingMergeOnMongoS" : 0,
+                "internalQueryMaxAddToSetBytes" : 104857600,
+                "internalDocumentSourceSetWindowFieldsMaxMemoryBytes" : 104857600
+            },
+            "ok" : 1.0
+        }
+
+        主要查看以下的 最佳的计划 winningPlan 字段:
+
+            explain.queryPlanner.winningPlan
+                查询优化器针对该query所返回的最优执行计划的详细内容。
+
+            explain.queryPlanner.winningPlan.stage
+                最优执行计划的stage, 这里返回是FETCH, 可以理解为通过返回的index位置去检索具体的文档（stage有数个模式）。
+
+            explain.queryPlanner.winningPlan.inputStage
+                explain.queryPlanner.winningPlan.stage 的 child stage, 此处是IXSCAN, 表示进行的是index scanning。
+
+            explain.queryPlanner.winningPlan.keyPattern
+                所扫描的index内容, 此处是w:1与n:1。
+
+            explain.queryPlanner.winningPlan.indexName
+                winning plan所选用的index。
+
+            explain.queryPlanner.winningPlan.isMultiKey
+                是否是Multikey, 此处返回是false, 如果索引建立在array上, 此处将是true。
+
+            explain.queryPlanner.winningPlan.direction
+                此query的查询顺序, 此处是forward, 如果用了.sort({w : -1})将显示backward。
+
+            explain.queryPlanner.winningPlan.indexBounds
+                winningplan所扫描的索引范围
+
+优化器 Profiler
+    查看 Profiler级别:
+
+        db.getProfilingLevel();
+        0: 不开启
+        1: 记录慢命令
+        2: 记录所有命令
+
+    开启Profiler 功能
+        启动时开启:
+            配置文件中使用
+                在mongodb.cnf 中配置 profile=1
+            启动服务器时使用
+                mongod -f mongodb.cnf
+
+        命令式开启:
+            // 开启记录慢命令 第一个参数为Profiler级别 1:为记录慢命令; 第二个参数为 毫秒数 200毫秒
+            db.setProfilingLevel(1, 200);
+            // 开启记录慢命令 第一个参数为Profiler级别 2:记录所有命令; 第二个参数为 毫秒数 100毫秒
+            db.setProfilingLevel(2, 100);
+
+    查看Profiler 日志
+        db.system.profile.find({millis : {$gt : 50}});
+        db.system.profile.find({millis : {$gt : 0}}).sort({ts : -1}).limit(1);
+
+常用的优化方案
+    创建索引
+        db.things.ensureIndex({age : 1}, {background : true});
+
+    限定返回的条数
+        db.things.find().sort({age : 1}).limit(10);
+
+    只查询用到的字段
+        db.things.find({}, {_id : 1, name : 1, age : 1}).sort().limit(10);
+
+    使用 hint 强制提示使用某个索引, 不能随便乱用, 因为查询的是 name = "zhangsan" 的条件, 索引是 age 列, 二者没有任何关系!
+
+        举例: 使用 things 表中的 age 索引
+            db.things.find({name : "zhangsan"}).hint({age : 1});
+
+    采用Profiler
+
+
+---------------------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------- 第11章 ReplicaSet集群 --------------------------------------------------
+---------------------------------------------------------------------------------------------------------------------------------------------
+参考: ReplicaSet集群搭建.txt
+
+---------------------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------- 第12章  Sharding 集群 --------------------------------------------------
+---------------------------------------------------------------------------------------------------------------------------------------------
+分片理论, 类似于 redis codis的 crc32(command.key) % 1024; 类似于 redis cluster 中的 crc16(command.key) % 16384;
+
+---------------------------------------------------------------------------------------------------------------------------------------------
+----------------------------------------------------------------- 第13章 Sharding+ReplicaSet 集群 --------------------------------------------
+---------------------------------------------------------------------------------------------------------------------------------------------
+参考: ReplicaSet-Sharding集群搭建.txt
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

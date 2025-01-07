@@ -1,0 +1,19 @@
+# mongodb.conf
+
+# Where to store the data.
+dbpath=/home/mongodb-linux-x86_64-rhel70-5.0.5/data/db/
+
+# where to log
+logpath=/home/mongodb-linux-x86_64-rhel70-5.0.5/logs/mongodb.log
+logappend=true
+
+# Turn on/off security. off is currently the default
+# noauth = true
+auth = true
+
+# daemon flag
+fork = true
+
+# ip and port
+bind_ip = 0.0.0.0
+port = 27017

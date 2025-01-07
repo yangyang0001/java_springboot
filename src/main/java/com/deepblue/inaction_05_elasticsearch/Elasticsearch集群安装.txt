@@ -1,0 +1,348 @@
+-------------------------------------------------------------------- 集群搭建 --------------------------------------------------------
+0、机器环境
+    3台linux机器
+
+1、安装jdk环境
+    jdk-8u311-linux-x64.tar.gz
+
+2、安装Elasticsearch
+    elasticsearch-6.5.0.tar.gz
+
+    mkdir -p /home/elasticsearch-6.5.0/data
+
+    创建用户 yang 密码: Yang199001, 以下命令在 root 用户下执行!
+    useradd elastic_yang
+    passwd elastic_yang
+
+    用户: elastic_yang  密码: Yangjianwei01
+
+    给用户赋权限
+    chown elastic_yang /home/elasticsearch-6.5.0/ -R
+
+3、启动Elasticsearch daemon 方式启动: -d
+
+    su elastic_yang
+    cd /home/elasticsearch-6.5.0/bin
+    ./elasticsearch -d
+
+
+出现错误:
+    [1]: max file descriptors [4096] for elasticsearch process is too low, increase to at least [65536]
+    [2]: memory locking requested for elasticsearch process but memory is not locked
+    [3]: max number of threads [3795] for user [elastic_yang] is too low, increase to at least [4096]
+    [4]: max virtual memory areas vm.max_map_count [65530] is too low, increase to at least [262144]
+
+解决方案:
+    切换到 root 用户:
+    vim /etc/security/limits.conf, 后添加以下内容:
+    * soft nofile 65536
+    * hard nofile 65536
+    * soft nproc 32000
+    * hard nproc 32000
+    * hard memlock unlimited
+    * soft memlock unlimited
+
+    ulimit -H -n 查看
+
+    vim /etc/sysctl.conf 追加如下:
+    vm.max_map_count=655360
+    执行如下命令是配置生效!
+    sysctl -p
+
+    vim /etc/systemd/system.conf, 分别修改以下内容:
+    DefaultLimitNOFILE=65536
+    DefaultLimitNPROC=32000
+    DefaultLimitMEMLOCK=infinity
+
+    重启系统后 继续 第3步!
+
+
+
+4、验证集群状态
+    集群健康值
+        http://192.168.188.12:9200/_cluster/health?pretty=true
+        {
+          "cluster_name" : "my-elasticsearch-cluster",
+          "status" : "green",
+          "timed_out" : false,
+          "number_of_nodes" : 3,
+          "number_of_data_nodes" : 3,
+          "active_primary_shards" : 0,
+          "active_shards" : 0,
+          "relocating_shards" : 0,
+          "initializing_shards" : 0,
+          "unassigned_shards" : 0,
+          "delayed_unassigned_shards" : 0,
+          "number_of_pending_tasks" : 0,
+          "number_of_in_flight_fetch" : 0,
+          "task_max_waiting_in_queue_millis" : 0,
+          "active_shards_percent_as_number" : 100.0
+        }
+
+    集群状态
+        http://192.168.188.12:9200/_cluster/state
+
+        {
+        	"cluster_name": "my-elasticsearch-cluster",
+        	"version": 2,
+        	"state_uuid": "jTjPV41WS4qD1BIAOxG9mg",
+        	"master_node": "1jmoA-6SRImKbKEDDz7Rqw",
+        	"blocks": {},
+        	"nodes": {
+        		"6Gdh_O63R4y2gPlSYddYCw": {
+        			"name": "node-1",
+        			"ephemeral_id": "MyjdzPddSgqiMK6F6dNg3Q",
+        			"transport_address": "192.168.188.12:9300",
+        			"attributes": {
+        				"rack": "r1"
+        			}
+        		},
+        		"m3LBopgTSXSSgfz_x-Vj5A": {
+        			"name": "node-2",
+        			"ephemeral_id": "TrXbC-2ZQhKE3FsPJCnYdw",
+        			"transport_address": "192.168.188.13:9300",
+        			"attributes": {
+        				"rack": "r2"
+        			}
+        		},
+        		"1jmoA-6SRImKbKEDDz7Rqw": {
+        			"name": "node-3",
+        			"ephemeral_id": "pHY9dv3-TWO15ONAwzneKg",
+        			"transport_address": "192.168.188.14:9300",
+        			"attributes": {
+        				"rack": "r3"
+        			}
+        		}
+        	},
+        	"metadata": {
+        		"cluster_uuid": "m7dPgUsWRaaW_5G_sb11xg",
+        		"templates": {},
+        		"indices": {},
+        		"index-graveyard": {
+        			"tombstones": []
+        		}
+        	},
+        	"routing_table": {
+        		"indices": {}
+        	},
+        	"routing_nodes": {
+        		"unassigned": [],
+        		"nodes": {
+        			"m3LBopgTSXSSgfz_x-Vj5A": [],
+        			"1jmoA-6SRImKbKEDDz7Rqw": [],
+        			"6Gdh_O63R4y2gPlSYddYCw": []
+        		}
+        	}
+        }
+
+    集群统计
+        http://192.168.188.12:9200/_cluster/stats
+
+        {
+        	"_nodes": {
+        		"total": 3,
+        		"successful": 3,
+        		"failed": 0
+        	},
+        	"cluster_name": "my-elasticsearch-cluster",
+        	"timestamp": 1645169453615,
+        	"status": "green",
+        	"indices": {
+        		"count": 0,
+        		"shards": {},
+        		"docs": {
+        			"count": 0,
+        			"deleted": 0
+        		},
+        		"store": {
+        			"size_in_bytes": 0,
+        			"throttle_time_in_millis": 0
+        		},
+        		"fielddata": {
+        			"memory_size_in_bytes": 0,
+        			"evictions": 0
+        		},
+        		"query_cache": {
+        			"memory_size_in_bytes": 0,
+        			"total_count": 0,
+        			"hit_count": 0,
+        			"miss_count": 0,
+        			"cache_size": 0,
+        			"cache_count": 0,
+        			"evictions": 0
+        		},
+        		"completion": {
+        			"size_in_bytes": 0
+        		},
+        		"segments": {
+        			"count": 0,
+        			"memory_in_bytes": 0,
+        			"terms_memory_in_bytes": 0,
+        			"stored_fields_memory_in_bytes": 0,
+        			"term_vectors_memory_in_bytes": 0,
+        			"norms_memory_in_bytes": 0,
+        			"points_memory_in_bytes": 0,
+        			"doc_values_memory_in_bytes": 0,
+        			"index_writer_memory_in_bytes": 0,
+        			"version_map_memory_in_bytes": 0,
+        			"fixed_bit_set_memory_in_bytes": 0,
+        			"max_unsafe_auto_id_timestamp": -9223372036854775808,
+        			"file_sizes": {}
+        		}
+        	},
+        	"nodes": {
+        		"count": {
+        			"total": 3,
+        			"data": 3,
+        			"coordinating_only": 0,
+        			"master": 3,
+        			"ingest": 3
+        		},
+        		"versions": ["5.0.0"],
+        		"os": {
+        			"available_processors": 6,
+        			"allocated_processors": 6,
+        			"names": [{
+        				"name": "Linux",
+        				"count": 3
+        			}],
+        			"mem": {
+        				"total_in_bytes": 5723258880,
+        				"free_in_bytes": 229486592,
+        				"used_in_bytes": 5493772288,
+        				"free_percent": 4,
+        				"used_percent": 96
+        			}
+        		},
+        		"process": {
+        			"cpu": {
+        				"percent": 1
+        			},
+        			"open_file_descriptors": {
+        				"min": 185,
+        				"max": 187,
+        				"avg": 185
+        			}
+        		},
+        		"jvm": {
+        			"max_uptime_in_millis": 6655743,
+        			"versions": [{
+        				"version": "1.8.0_321",
+        				"vm_name": "Java HotSpot(TM) 64-Bit Server VM",
+        				"vm_version": "25.321-b07",
+        				"vm_vendor": "Oracle Corporation",
+        				"count": 3
+        			}],
+        			"mem": {
+        				"heap_used_in_bytes": 486795192,
+        				"heap_max_in_bytes": 3168927744
+        			},
+        			"threads": 82
+        		},
+        		"fs": {
+        			"total_in_bytes": 54716792832,
+        			"free_in_bytes": 40263217152,
+        			"available_in_bytes": 40263217152
+        		},
+        		"plugins": [],
+        		"network_types": {
+        			"transport_types": {
+        				"netty4": 3
+        			},
+        			"http_types": {
+        				"netty4": 3
+        			}
+        		}
+        	}
+        }
+
+    集群主从节点查看
+        http://192.168.188.12:9200/_cat/nodes
+
+        192.168.188.12 20 96 0 0.00 0.01 0.05 mdi - node-1
+        192.168.188.13 11 96 0 0.00 0.01 0.05 mdi - node-2
+        192.168.188.14 13 96 0 0.00 0.01 0.05 mdi * node-3
+
+
+
+安装并启动 Head 插件:
+
+    1. 首先安装 nodejs
+    wget https://nodejs.org/dist/v14.17.5/node-v14.17.5-linux-x64.tar.gz
+
+    配置 NodeJS 环境变量
+    export NODE_HOME=/home/node-v14.17.5-linux-x64
+    export PATH=$NODE_HOME/bin:$PATH
+
+
+    // 以下运行一个就OK了 (使用不同的镜像)
+    npm install -g grunt-cli --registry=https://registry.npm.taobao.org
+    npm install -g grunt-cli --registry=https://registry.npmmirror.com
+    npm install -g grunt-cli --registry=https://mirrors.huaweicloud.com/repository/npm/
+
+    grunt -version
+
+    npm install -g cnpm --registry=https://registry.npm.taobao.org
+
+    2. 下载并编译安装 Head 插件
+    yum -y install git
+
+    cd /home
+    git clone https://github.com/mobz/elasticsearch-head.git
+
+    cd elasticsearch-head
+    npm install
+
+
+    出现问题:
+    npm install phantomjs-prebuilt@2.1.16 --ignore-scripts
+
+
+    npm run start
+
+
+启动顺序:
+    Elasticsearch相当于MySQL, ElasticSearch-head 相当于客户端链接工具! 所以首先启动Elasticsearch, 再启动Elasticsearch-Head插件!
+
+    su elastic_yang
+    cd /home/elasticsearch-6.5.0/bin
+    ./elasticsearch -d
+
+    cd /home/elasticsearch-head/node_modules/grunt/bin
+    ./grunt server &
+
+    访问head插件地址:
+    http://192.168.188.12:9100/
+
+安装 Kibana 客户端:
+
+    启动kibana
+        cd /home/kibana-6.5.0-linux-x86_64/bin
+        ./kibana &
+
+    访问地址
+        http://192.168.188.12:5601/
+
+
+Index 创建默认的 shards (默认 主分片个数为 5), replias (默认 每个主分片的副本个数为 1)
+
+
+安装中文分词器:
+    下载地址: https://github.com/medcl/elasticsearch-analysis-ik
+    下载对应版本的，因为安装的elasticsearch是6.5.0版本的,所以这里就要下载6.x版本的中文分词器！elasticsearch-analysis-ik-6.x.zip
+    1、下载并上传到linux上
+    2、解压并且重新用	mvn 重新编译
+        a、首先进入到指定的目录下进行编译:
+           cd /home/elasticsearch-analysis-ik/
+           mvn clean install -Dmaven.test.skip=true
+
+        b、将打包好的zip文件copy到指定的文件夹下并重新解压缩!必须创建叫ik的文件夹这是es默认的中文分词器寻找指路径
+           cd /home/elasticsearch-6.5.0/plugins/
+           mkdir ik
+           cd /home/elasticsearch-analysis-ik/target/releases
+           cp elasticsearch-analysis-ik-6.5.0.zip /home/elasticsearch-6.5.0/plugins/ik/
+
+        c、从新解压缩,并删除多余的源文件
+           cd /home/elasticsearch-6.5.0/plugins/ik/
+           unzip elasticsearch-analysis-ik-6.5.0.zip
+           rm -rf elasticsearch-analysis-ik-6.5.0.zip

@@ -1,0 +1,194 @@
+---------------------------------------------------------------------------------------------------------------------------------------------
+------------------------------------------------------------ 第6章 Spring AOP 基础 -----------------------------------------------------------
+---------------------------------------------------------------------------------------------------------------------------------------------
+什么是AOP: 面向切面编程, Java中没有提供横向抽象提取的功能功, 一般都是通过纵向提取父类的方式进行开发, 因此簇生的AOP的产生!
+
+AOP术语:
+    连接点 (JoinPoint): 所谓连接点, 就是代码中的某些特定点
+    切点 (Pointcut): 一组连接点就称为切入点
+    增强 (Advice): 增强原始代码逻辑, 这里的增强表示 在原始代码的 前后或者抛出异常时 进行更多的操作
+    切面 (Aspect): 由切点和增强共同组成
+
+Spring AOP 支持两种代理模式
+    1、基于 JDK 的动态代理, 这种是基于接口的代理
+    2、基于 CGLib 的动态代理, 这种支持类的动态代理
+
+Advice 分为5类, 示例 com.deepblue.inaction_00_spring.chapter_06 example_001 到 example_004
+    前置增强
+    后置增强
+    环绕增强
+    异常抛出增强
+    引介增强
+
+Pointcut 分为6类
+    静态方法切点
+    表达式切点
+    动态方法切点
+    流程切点
+    复合切点
+    注解切点
+
+Advisor 分为3类
+    一般切面
+    切点切面 和 上面的 Pointcut 是一一对应的关系, 主要包括以下6种: (参考 com.deepblue.inaction_00_spring.chapter_06 example_005 到 example_009)
+        静态方法切面
+        表达式切面
+        动态方法切面
+        流程切面
+        复合切面
+        注解切面
+    引介切面
+
+---------------------------------------------------------------------------------------------------------------------------------------------
+-------------------------------------------------------- 第7章 基于@Aspect 和 Schema的AOP -----------------------------------------------------
+---------------------------------------------------------------------------------------------------------------------------------------------
+Spring AOP 包括两种 AOP实现: 基于XML配置的AOP 和 基于 AspectJ 的自编码AOP
+
+自定义注解: 请参考 01_自定义注解单位正交基.png , 举例: com.deepblue.inaction_00_spring.chapter_07 example_001
+
+@Aspect 语法基础, 切点表达式函数有9个, 可以分为四类: 1、方法切点函数 2、方法参数切点函数 3、目标类切点函数 4、代理类切点函数
+
+@Aspect 切点函数详解 举例: com.deepblue.inaction_00_spring.chapter_07 example_003 到 example_006
+
+命名切点: 将切点进行抽取组成一个类, 可以用于不同的 **Aspect 类中! 举例: com.deepblue.inaction_00_spring.chapter_07 example_007
+
+访问连接点信息 通过 JoinPoint; 举例: com.deepblue.inaction_00_spring.chapter_07 example_007
+
+
+---------------------------------------------------------------------------------------------------------------------------------------------
+------------------------------------------------------------ 第9章 Spring 事务管理 ------------------------------------------------------------
+---------------------------------------------------------------------------------------------------------------------------------------------
+核心要点:
+    事务属性值的实际意义
+    ThreadLocal 的工作机制
+    Spring事务管理的体系结构
+    基于XML和注解的事务配置
+
+事务的基础知识:
+    什么是数据库事务?
+    数据库事务必须遵循 ACID 四个特性: Atomic 原子性, Consistency 一致性, Isolation 隔离性, Durabiliy 持久性!
+
+脏读: A事务 读取到 B事务没有提交的数据;
+
+不可重复读: A事务读取数据, 此时B事务 修改或者删除 某一行数据 并提交, A事务再次读取数据, 并且A事务 能够读取到这一行修改或者删除的数据, 造成A事务前后两次读取数据不一致! 一般用行锁控制!
+
+幻读: A事务读取数据, 此时B事务 插入了一条新的数据 并提交, A事务再次读取数据, 并且A事务能够 读取到这一条新增的数据, 造成A事务前后两次读取的数据不一致!
+
+不可重复读 和 幻读 非常容易混淆, 前者是因为B事务 修改或者删除了一行数据, 后者是因为B事务 添加了一条新的数据, 前者往往用 行锁处理, 后者用表锁进行处理!
+
+
+@Transation
+
+
+public enum Propagation {
+
+	/**
+	 * Support a current transaction, create a new one if none exists.
+	 * Analogous to EJB transaction attribute of the same name.
+	 * <p>This is the default setting of a transaction annotation.
+
+	 支持当前事务，如果不存在则创建新事务。
+     类似于同名的 EJB 事务属性。
+     <p>这是事务注释的默认设置。
+
+	 */
+	REQUIRED(TransactionDefinition.PROPAGATION_REQUIRED),
+
+	/**
+	 * Support a current transaction, execute non-transactionally if none exists.
+	 * Analogous to EJB transaction attribute of the same name.
+	 * <p>Note: For transaction managers with transaction synchronization,
+	 * PROPAGATION_SUPPORTS is slightly different from no transaction at all,
+	 * as it defines a transaction scope that synchronization will apply for.
+	 * As a consequence, the same resources (JDBC Connection, Hibernate Session, etc)
+	 * will be shared for the entire specified scope. Note that this depends on
+	 * the actual synchronization configuration of the transaction manager.
+	 * @see org.springframework.transaction.support.AbstractPlatformTransactionManager#setTransactionSynchronization
+
+	 支持当前事务，如果不存在则以非事务方式执行。
+     类似于同名的 EJB 事务属性。
+     <p>注意：对于具有事务同步的事务管理器，
+     PROPAGATION_SUPPORTS 与根本没有事务略有不同，
+     因为它定义了同步将适用的事务范围。
+     因此，相同的资源（JDBC 连接、Hibernate 会话等）
+     将在整个指定范围内共享。请注意，这取决于
+     事务管理器的实际同步配置。
+
+	 */
+	SUPPORTS(TransactionDefinition.PROPAGATION_SUPPORTS),
+
+	/**
+	 * Support a current transaction, throw an exception if none exists.
+	 * Analogous to EJB transaction attribute of the same name.
+	 支持当前事务，如果不存在则抛出异常。
+     类似于同名的 EJB 事务属性。
+	 */
+	MANDATORY(TransactionDefinition.PROPAGATION_MANDATORY),
+
+	/**
+	 * Create a new transaction, and suspend the current transaction if one exists.
+	 * Analogous to the EJB transaction attribute of the same name.
+	 * <p><b>NOTE:</b> Actual transaction suspension will not work out-of-the-box
+	 * on all transaction managers. This in particular applies to
+	 * {@link org.springframework.transaction.jta.JtaTransactionManager},
+	 * which requires the {@code javax.transaction.TransactionManager} to be
+	 * made available to it (which is server-specific in standard Java EE).
+	 * @see org.springframework.transaction.jta.JtaTransactionManager#setTransactionManager
+	 */
+	REQUIRES_NEW(TransactionDefinition.PROPAGATION_REQUIRES_NEW),
+
+	/**
+	 * Execute non-transactionally, suspend the current transaction if one exists.
+	 * Analogous to EJB transaction attribute of the same name.
+	 * <p><b>NOTE:</b> Actual transaction suspension will not work out-of-the-box
+	 * on all transaction managers. This in particular applies to
+	 * {@link org.springframework.transaction.jta.JtaTransactionManager},
+	 * which requires the {@code javax.transaction.TransactionManager} to be
+	 * made available to it (which is server-specific in standard Java EE).
+	 * @see org.springframework.transaction.jta.JtaTransactionManager#setTransactionManager
+	 */
+	NOT_SUPPORTED(TransactionDefinition.PROPAGATION_NOT_SUPPORTED),
+
+	/**
+	 * Execute non-transactionally, throw an exception if a transaction exists.
+	 * Analogous to EJB transaction attribute of the same name.
+	 */
+	NEVER(TransactionDefinition.PROPAGATION_NEVER),
+
+	/**
+	 * Execute within a nested transaction if a current transaction exists,
+	 * behave like PROPAGATION_REQUIRED else. There is no analogous feature in EJB.
+	 * <p>Note: Actual creation of a nested transaction will only work on specific
+	 * transaction managers. Out of the box, this only applies to the JDBC
+	 * DataSourceTransactionManager when working on a JDBC 3.0 driver.
+	 * Some JTA providers might support nested transactions as well.
+	 * @see org.springframework.jdbc.datasource.DataSourceTransactionManager
+	 */
+	NESTED(TransactionDefinition.PROPAGATION_NESTED);
+
+
+	private final int value;
+
+
+	Propagation(int value) {
+		this.value = value;
+	}
+
+	public int value() {
+		return this.value;
+	}
+
+}
+
+
+
+
+ThreadLocal 基础知识
+
+
+
+
+
+
+
+
