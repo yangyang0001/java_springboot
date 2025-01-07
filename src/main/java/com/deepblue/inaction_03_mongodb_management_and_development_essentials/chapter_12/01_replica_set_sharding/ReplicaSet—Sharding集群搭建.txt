@@ -53,12 +53,12 @@
     mongo --port 27017
 
     客户端下执行初始化命令:
-    config = {_id: "shard1", members :[
-        {"_id":0, "host":"192.168.188.30:27017"},
-        {"_id":1, "host":"192.168.188.31:27017"},
-        {"_id":2, "host":"192.168.188.32:27017"}]
-    }
-    rs.initiate(config)
+        config = {_id: "shard1", members :[
+            {"_id":0, "host":"192.168.188.30:27017"},
+            {"_id":1, "host":"192.168.188.31:27017"},
+            {"_id":2, "host":"192.168.188.32:27017"}]
+        }
+        rs.initiate(config)
 
 配置 ReplicaSet 2
 

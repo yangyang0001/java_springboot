@@ -14,7 +14,8 @@ public class MongoDBConfig {
 
     @Bean
     public MongoClient mongoClient() {
-        return MongoClients.create("mongodb://yangyang:123456@192.168.188.82:27017/mydb");
+//        return MongoClients.create("mongodb://yangyang:123456@192.168.188.82:27017/mydb");
+        return MongoClients.create("mongodb://192.168.188.84:30000,192.168.188.85:30000,192.168.188.86:30000/mydb?maxPoolSize=512");
     }
 
     @Bean

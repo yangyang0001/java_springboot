@@ -8,10 +8,10 @@ import org.I0Itec.zkclient.ZkClient;
 public class ZkClientExample {
 
     public final static String ZOOKEEPER_CONNECTION_URL =
-            "192.168.188.15:2181," +
-            "192.168.188.16:2181," +
-            "192.168.188.17:2181," +
-            "192.168.188.18:2181";
+            "192.168.188.66:2181," +
+            "192.168.188.67:2181," +
+            "192.168.188.68:2181," +
+            "192.168.188.69:2181";
 
     public static void main(String[] args){
 

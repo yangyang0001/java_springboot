@@ -1,0 +1,336 @@
+--------------------------------------------------- 副本集 + 分片 搭建 start ---------------------------------------------------
+
+1. 架构简介: 架构图参考: mongodb_repica-set-sharding_集群.jpg
+    架构解释:
+    Mongos:         和真实的客户端打交道的地方, 他也不知道怎么去找存储的数据, 或者如何存储数据, 他去找 ConfigServer
+    Config:         存储 服务器节点, ReplicaSet, Sharding 等配置信息, 真正意义管理数据如何存储的关键服务!
+    MongoDB:        存储 真实数据的地方!
+
+    3个Mongos节点, 1个Config副本集, 2个Sharding副本集!
+
+    2个分片副本集:
+    shard1 192.168.188.84:27017,192.168.188.85:27017,192.168.188.86:27017
+    shard2 192.168.188.84:27018,192.168.188.85:27018,192.168.188.86:27018
+
+    1个Config副本集:
+    192.168.188.84:20000, 192.168.188.85:20000, 192.168.188.86:20000
+
+    3个Mongos节点:
+    192.168.188.84:30000, 192.168.188.85:30000, 192.168.188.86:30000
+
+
+
+    基本认知:
+    文档 document, 集合 collection, 数据库 database
+    database   相当于  MySQL 中的 数据库!
+    collection 相当于  MySQL 中的 表!
+    document   相当于  MySQL 中的 行!
+
+    注意点: 分片不会自动生成, 需要手动操作某个 数据库 进行分片, 然后再设置 某个集合 分片!
+    激活 数据库 的分片功能:
+    db.runCommand({enablesharding : "test"})
+    激活 数据库中集合(类似于表) 的分片功能:
+    db.runCommand({shardcollection : "test.users", key : {_id : 1}})
+
+
+
+
+2. 环境准备:
+    3台 centos7.x 虚拟机:
+        192.168.188.84
+        192.168.188.85
+        192.168.188.86
+
+    下载地址: https://www.mongodb.com/try/download/community, 本人使用 mongodb-linux-x86_64-rhel70-5.0.30.tgz
+
+    想看 单台虚拟机的基本配置的, 请看本人的项目 java_hotspot_action 项目! 项目查看有门槛, 搞 java 的自己去看看吧!
+
+
+3. 配置环境变量:   (3台服务器分别配置)
+    ########################################################## Mongo环境变量  ################################################
+    export MONGO_HOME=/home/mongodb-linux-x86_64-rhel70-5.0.30
+    export PATH=$MONGO_HOME/bin:$PATH
+
+4. 创建先关的文件夹, 为后续步骤做准备:
+    三台服务器执行:
+    mkdir -p /home/mongodb-linux-x86_64-rhel70-5.0.30/data/shard1
+    mkdir -p /home/mongodb-linux-x86_64-rhel70-5.0.30/data/shard2
+    mkdir -p /home/mongodb-linux-x86_64-rhel70-5.0.30/data/config
+
+5. 搭建 shard1, shard2 分片副本集服务:
+
+    A. 三台服务器 都添加 shard1 分片副本集配置文件 mongo-shard1.conf 内容如下: 该文件本人存放在 /home/mongodb-linux-x86_64-rhel70-5.0.30 目录下
+
+    # 分片集群属性开启
+    shardsvr=true
+    # 分片名称
+    replSet=shard1
+    bind_ip=0.0.0.0
+    port=27017
+    # 数据存放地址
+    dbpath=/home/mongodb-linux-x86_64-rhel70-5.0.30/data/shard1
+    # 日志存放地址
+    logpath=/home/mongodb-linux-x86_64-rhel70-5.0.30/data/shard1/shard1.log
+    # 日志是否追加
+    logappend=true
+    fork=true
+
+    B. 三台服务器 都添加 shard2 分片副本集配置文件 mongo-shard2.conf 内容如下: 该文件本人存放在 /home/mongodb-linux-x86_64-rhel70-5.0.30 目录下
+
+    # 分片集群属性开启
+    shardsvr=true
+    # 分片名称
+    replSet=shard2
+    bind_ip=0.0.0.0
+    port=27018
+    # 数据存放地址
+    dbpath=/home/mongodb-linux-x86_64-rhel70-5.0.30/data/shard2
+    # 日志存放地址
+    logpath=/home/mongodb-linux-x86_64-rhel70-5.0.30/data/shard2/shard2.log
+    # 日志是否追加
+    logappend=true
+    fork=true
+
+    C. 三台服务器 分别启动 shard1 分片副本集服务, 分别执行下面的命令:
+    mongod -f /home/mongodb-linux-x86_64-rhel70-5.0.30/mongo-shard1.conf
+
+    D. 三台服务器 分别启动 shard2 分片副本集服务, 分别执行下面的命令:
+    mongod -f /home/mongodb-linux-x86_64-rhel70-5.0.30/mongo-shard2.conf
+
+6. 登录副本集 shard1, shard2 分别进行初始化配置!
+    A. 初始化 shard1 副本集:
+
+        进入 shard1 副本集客户端, 任意一台服务器即可:
+        [root@localhost ~]# mongo --port 27017
+
+        进入客户端后执行如下命令:
+        config = {_id: "shard1", members :[
+            {"_id":0, "host":"192.168.188.84:27017"},
+            {"_id":1, "host":"192.168.188.85:27017"},
+            {"_id":2, "host":"192.168.188.86:27017"}]
+        }
+        rs.initiate(config)
+
+
+
+        ------------------------------------------------- 以下是命令操作过程, 仅供参靠 start -----------------------------------
+        > config = {_id: "shard1", members :[
+        ...     {"_id":0, "host":"192.168.188.84:27017"},
+        ...     {"_id":1, "host":"192.168.188.85:27017"},
+        ...     {"_id":2, "host":"192.168.188.86:27017"}]
+        ... }
+        {
+                "_id" : "shard1",
+                "members" : [
+                        {
+                                "_id" : 0,
+                                "host" : "192.168.188.84:27017"
+                        },
+                        {
+                                "_id" : 1,
+                                "host" : "192.168.188.85:27017"
+                        },
+                        {
+                                "_id" : 2,
+                                "host" : "192.168.188.86:27017"
+                        }
+                ]
+        }
+        > rs.initiate(config)
+        { "ok" : 1 }
+        shard1:SECONDARY>
+        ------------------------------------------------- 以上是命令操作过程, 仅供参靠 end -----------------------------------
+
+    B. 初始化 shard2 副本集:
+
+        进入 shard2 副本集客户端, 任意一台服务器即可:
+        [root@localhost ~]# mongo --port 27018
+
+        进入客户端后执行如下命令:
+        config = {_id: "shard2", members :[
+            {"_id":0, "host":"192.168.188.84:27018"},
+            {"_id":1, "host":"192.168.188.85:27018"},
+            {"_id":2, "host":"192.168.188.86:27018"}]
+        }
+        rs.initiate(config)
+
+
+
+        ------------------------------------------------- 以下是命令操作过程, 仅供参靠 start -----------------------------------
+        > config = {_id: "shard2", members :[
+        ...     {"_id":0, "host":"192.168.188.84:27018"},
+        ...     {"_id":1, "host":"192.168.188.85:27018"},
+        ...     {"_id":2, "host":"192.168.188.86:27018"}]
+        ... }
+        {
+                "_id" : "shard2",
+                "members" : [
+                        {
+                                "_id" : 0,
+                                "host" : "192.168.188.84:27018"
+                        },
+                        {
+                                "_id" : 1,
+                                "host" : "192.168.188.85:27018"
+                        },
+                        {
+                                "_id" : 2,
+                                "host" : "192.168.188.86:27018"
+                        }
+                ]
+        }
+        > rs.initiate(config)
+        { "ok" : 1 }
+        shard2:SECONDARY>
+        ------------------------------------------------- 以上是命令操作过程, 仅供参靠 end -----------------------------------
+
+
+
+7. 搭建 Config 副本集:
+    A. 创建 mongo-config.conf 文件, 内容如下: 该文件本人存放在 /home/mongodb-linux-x86_64-rhel70-5.0.30 目录下
+
+    configsvr=true
+    replSet=cfgReplSet
+    bind_ip=0.0.0.0
+    port=20000
+    dbpath=/home/mongodb-linux-x86_64-rhel70-5.0.30/data/config
+    logpath=/home/mongodb-linux-x86_64-rhel70-5.0.30/data/config/config.log
+    logappend=true
+    fork=true
+
+    B. 三台服务器 分别启动 Config 分片副本集服务, 分别执行下面的命令:
+    [root@localhost ~]# mongod -f /home/mongodb-linux-x86_64-rhel70-5.0.30/mongo-config.conf
+
+
+8. 初始化 Config 副本集:
+        进入 Config 副本集客户端, 任意一台服务器即可:
+        [root@localhost ~]# mongo --port 20000
+    
+        客户端下执行初始化命令:
+        config = {_id: "cfgReplSet", members :[
+            {"_id":0, "host":"192.168.188.84:20000"},
+            {"_id":1, "host":"192.168.188.85:20000"},
+            {"_id":2, "host":"192.168.188.86:20000"}]
+        }
+        rs.initiate(config)
+
+
+        ------------------------------------------------- 以下是命令操作过程, 仅供参靠 start -----------------------------------
+        > config = {_id: "cfgReplSet", members :[
+        ...     {"_id":0, "host":"192.168.188.84:20000"},
+        ...     {"_id":1, "host":"192.168.188.85:20000"},
+        ...     {"_id":2, "host":"192.168.188.86:20000"}]
+        ... }
+        {
+                "_id" : "cfgReplSet",
+                "members" : [
+                        {
+                                "_id" : 0,
+                                "host" : "192.168.188.84:20000"
+                        },
+                        {
+                                "_id" : 1,
+                                "host" : "192.168.188.85:20000"
+                        },
+                        {
+                                "_id" : 2,
+                                "host" : "192.168.188.86:20000"
+                        }
+                ]
+        }
+        > rs.initiate(config)
+        {
+                "ok" : 1,
+                "$gleStats" : {
+                        "lastOpTime" : Timestamp(1736275661, 1),
+                        "electionId" : ObjectId("000000000000000000000000")
+                },
+                "lastCommittedOpTime" : Timestamp(1736275661, 1)
+        }
+        cfgReplSet:SECONDARY>
+        ------------------------------------------------- 以上是命令操作过程, 仅供参靠 end -----------------------------------
+
+
+9. 搭建 3台 mongos 路由服务 Route Process:
+    A. 创建 mongos.conf 配置文件, 内容如下: 该文件本人存放在 /home/mongodb-linux-x86_64-rhel70-5.0.30 目录下
+
+    configdb=cfgReplSet/192.168.188.84:20000,192.168.188.85:20000,192.168.188.86:20000
+    bind_ip=0.0.0.0
+    port=30000
+    logpath=/home/mongodb-linux-x86_64-rhel70-5.0.30/data/mongos.log
+    logappend=true
+    fork=true
+
+
+    B. 分别启动三台服务器的 mongos 服务!
+    [root@localhost ~]# mongos -f /home/mongodb-linux-x86_64-rhel70-5.0.30/mongos.conf
+
+
+10. 添加 shard1, shard2 分片功能到集群节点中:
+    A. 连接任意一台服务器中的 mongos 服务:
+    [root@localhost ~]# mongo --port 30000
+
+    B. 添加shard分片功能到集群中(TODO: 非常重要)
+    use admin
+    db.runCommand({addshard: "shard1/192.168.188.84:27017,192.168.188.85:27017,192.168.188.86:27017"})
+    db.runCommand({addshard: "shard2/192.168.188.84:27018,192.168.188.85:27018,192.168.188.86:27018"})
+
+--------------------------------------------------- 副本集 + 分片 搭建 end ---------------------------------------------------
+
+每次创建新的 数据库和新的表必须执行:
+    A. 连接任意一台服务器中的 mongos 服务:
+    [root@localhost ~]# mongo --port 30000
+
+    创建数据库 test
+    mongos> use test
+
+    使用 admin 数据库 激活以下功能:
+    mongos> use admin
+
+    激活数据库的分片功能:
+    mongos> db.runCommand({enablesharding : "test"})
+
+    激活数据库中表的分片功能:
+    mongos> db.runCommand({shardcollection : "test.users", key : {_id : 1}})
+
+验证 shard1, shard2 分片功能:
+    mongos> use test
+    mongos> for(var i = 0; i < 200000; i++) {db.users.insert({"id": i, "address_1": "Beijing", "address_2": "Shanghai"});}
+    mongos> db.users.stats()
+
+
+
+TODO 程序员必知必会, 每次创建新的数据库和新的表必须执行:
+
+    连接任意一台服务器的 mongos 服务:
+    mongo --port 30000
+
+    激活数据库的分片功能, 举例如下:
+    sh.enableSharding("TDB1")
+    sh.enableSharding("TDB2")
+    sh.enableSharding("TDB3")
+    sh.enableSharding("TDB4")
+
+    激活数据库中表的分片功能, 举例如下:
+    sh.shardCollection("TDB1.test01", {_id:1})
+    sh.shardCollection("TDB2.test02", {_id:1})
+    sh.shardCollection("TDB3.test03", {_id:1})
+    sh.shardCollection("TDB4.test04", {_id:1})
+
+
+--------------------------------------------------- 后期运维 ---------------------------------------------------
+先启动 config 服务: 三台服务器分别启动
+mongod -f /home/mongodb-linux-x86_64-rhel70-5.0.30/mongo-config.conf
+
+再启动 shard  服务: 三台服务器分别启动
+mongod -f /home/mongodb-linux-x86_64-rhel70-5.0.30/mongo-shard1.conf
+mongod -f /home/mongodb-linux-x86_64-rhel70-5.0.30/mongo-shard2.conf
+
+最后启动 mongos 服务: 三台服务器分别启动
+mongos -f /home/mongodb-linux-x86_64-rhel70-5.0.30/mongos.conf
+
+TODO 这个顺序非常重要:
+1. 启动顺序: config server -> 副本集/分片(shardX) -> mongos
+2. 关闭顺序: mongos -> 副本集/分片(shardX) -> config server
+
+
