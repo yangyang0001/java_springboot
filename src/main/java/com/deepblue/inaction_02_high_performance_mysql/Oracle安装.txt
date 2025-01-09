@@ -8,6 +8,9 @@
     export PATH=$PATH:$JRE_HOME/bin:$JAVA_HOME/bin
 
 2. 下载 oracle 安装包
+    TODO 页面里面有个许可协议, 单选一下(必做, 否则无效!)
+    https://www.oracle.com/technetwork/articles/112010-sparc-x64soft-095586-zhs.html
+
     http://download.oracle.com/otn/linux/oracle11g/R2/linux.x64_11gR2_database_1of2.zip
     http://download.oracle.com/otn/linux/oracle11g/R2/linux.x64_11gR2_database_2of2.zip
 
@@ -135,7 +138,7 @@
 
     添加如下配置:
         oracle.install.option=INSTALL_DB_AND_CONFIG
-        ORACLE_HOSTNAME=192.168.188.51 #实际上可以修改成你自己的主机名或者域名(IP)
+        ORACLE_HOSTNAME=192.168.188.90 #实际上可以修改成你自己的主机名或者域名(IP)
         UNIX_GROUP_NAME=oinstall
         INVENTORY_LOCATION=/home/oracle/tools/oraInventory
         SELECTED_LANGUAGES=en,zh_CN
@@ -284,7 +287,7 @@
 
     使用 scott 用户:
     sqlplus /nolog
-    connect / as sysdba
+    connect / as sysdba;
     alter user scott account unlock;
     alter user scott identified by "tiger" account unlock;
 
