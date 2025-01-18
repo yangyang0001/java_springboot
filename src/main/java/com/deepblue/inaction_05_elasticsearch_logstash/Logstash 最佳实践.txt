@@ -1,0 +1,112 @@
+-----------------------------------------------------------------------------------------------------------------------------------------
+------------------------------------------------------------ 第0章 书籍地址 -----------------------------------------------------
+-----------------------------------------------------------------------------------------------------------------------------------------
+https://doc.yonyoucloud.com/doc/logstash-best-practice-cn/index.html
+
+-----------------------------------------------------------------------------------------------------------------------------------------
+------------------------------------------------------------ 第1章 基础知识 -----------------------------------------------------
+-----------------------------------------------------------------------------------------------------------------------------------------
+Logstash 是什么?
+    Logstash 是一个开源的、具有实时流水线处理能力的 数据收集引擎! 参考 01_Logstash运行原理.png, 有个主要组件的 大概认知!
+
+Logstash 主要干什么?
+    Logstash 可以动态地统一来自不同来源的数据, 并将数据规范化后发送到您选择的目标位置。
+
+    它能够清理和共享所有数据, 以支持多种高级的下游分析和可视化应用场景。
+    
+    虽然 Logstash 最初是为日志收集领域带来创新, 但其功能已远远超出了这一用途。任何类型的事件都可以通过广泛的 input、filter 和 output 插件 进行丰富和转换,
+    许多原生编解码器的支持进一步简化了数据的摄取过程。通过处理更多数量和多样化的数据, Logstash 加速了您的洞察力获取过程。
+
+Logstash 怎么使用?
+    先从 HelloWorld 开始! 通过学习以后的章节 逐渐认知和理解 01_Logstash运行原理.png 中的各个组件!
+
+
+Logstash 下载和安装:
+    背景: 本人使用的 elasticsearch 是 elasticsearch-6.5.0 版本, 如果读者想用自己的版本可以自行 去官网下载!
+
+    首先安装 JDK 本人安装 1.8.0_x
+    [root@localhost linux_libs]# java -version
+    java version "1.8.0_431"
+    Java(TM) SE Runtime Environment (build 1.8.0_431-b10)
+    Java HotSpot(TM) 64-Bit Server VM (build 25.431-b10, mixed mode)
+
+    Logstash 下载:  wget https://artifacts.elastic.co/downloads/logstash/logstash-6.5.0.tar.gz
+
+    Logstash 解压 并 配置环境变量:
+    ######################################################## logstash 环境变量  ##############################################
+    export LOGSTASH_HOME=/home/logstash-6.5.0
+    export PATH=$LOGSTASH_HOME/bin:$PATH
+
+
+HelloWorld 案例:
+    使用如下命令 实现 HelloWorld 案例:
+    logstash -e 'input { stdin{ } } output { stdout{ } }'
+    logstash -e 'input { stdin{ } } output { stdout{codec => rubydebug} }' 本人使用这个命令!
+
+    测试结果如下:
+    [root@localhost logstash-6.5.0]# logstash -e 'input { stdin{ } } output { stdout{codec => rubydebug} }'
+    Sending Logstash logs to /home/logstash-6.5.0/logs which is now configured via log4j2.properties
+    [2025-01-16T02:33:34,006][WARN ][logstash.config.source.multilocal] Ignoring the 'pipelines.yml' file because modules or command line options are specified
+    [2025-01-16T02:33:34,027][INFO ][logstash.runner          ] Starting Logstash {"logstash.version"=>"6.5.0"}
+    [2025-01-16T02:33:37,762][INFO ][logstash.pipeline        ] Starting pipeline {:pipeline_id=>"main", "pipeline.workers"=>1, "pipeline.batch.size"=>125, "pipeline.batch.delay"=>50}
+    [2025-01-16T02:33:37,957][INFO ][logstash.pipeline        ] Pipeline started successfully {:pipeline_id=>"main", :thread=>"#<Thread:0x8d7ddfb run>"}
+    [2025-01-16T02:33:38,029][INFO ][logstash.agent           ] Pipelines running {:count=>1, :running_pipelines=>[:main], :non_running_pipelines=>[]}
+    The stdin plugin is now waiting for input:
+    [2025-01-16T02:33:38,377][INFO ][logstash.agent           ] Successfully started Logstash API endpoint {:port=>9600}
+    ---------------------------------------- 下面是 自己输入 HelloWorld, 后面是输出的 json 结果 ----------------------------------------
+    HelloWorld
+    {
+          "@version" => "1",
+        "@timestamp" => 2025-01-15T18:36:34.053Z,
+           "message" => "HelloWorld",
+              "host" => "localhost.localdomain"
+    }
+
+TODO: Logstash 必须有两个插件 input 插件 和 output 插件!
+
+Ruby 语言相关知识点! 这个查看 ruby 语言相关的书籍吧!
+
+
+-----------------------------------------------------------------------------------------------------------------------------------------
+------------------------------------------------------------ 第2章 Input插件 -----------------------------------------------------
+-----------------------------------------------------------------------------------------------------------------------------------------
+1、stdin 标准输入 插件!  chapter_02_input_001_stdin.conf
+    测试结果如下:
+    [root@localhost ~]# logstash -f /home/logstash-6.5.0/config/chapter_02_input_001_stdin.conf
+    Sending Logstash logs to /home/logstash-6.5.0/logs which is now configured via log4j2.properties
+    [2025-01-16T22:49:06,275][WARN ][logstash.config.source.multilocal] Ignoring the 'pipelines.yml' file because modules or command line options are specified
+    [2025-01-16T22:49:06,289][INFO ][logstash.runner          ] Starting Logstash {"logstash.version"=>"6.5.0"}
+    [2025-01-16T22:49:08,949][INFO ][logstash.pipeline        ] Starting pipeline {:pipeline_id=>"main", "pipeline.workers"=>2, "pipeline.batch.size"=>125, "pipeline.batch.delay"=>50}
+    [2025-01-16T22:49:09,034][INFO ][logstash.inputs.stdin    ] Automatically switching from plain to line codec {:plugin=>"stdin"}
+    [2025-01-16T22:49:09,093][INFO ][logstash.pipeline        ] Pipeline started successfully {:pipeline_id=>"main", :thread=>"#<Thread:0x4c8dfaba run>"}
+    The stdin plugin is now waiting for input:
+    [2025-01-16T22:49:09,153][INFO ][logstash.agent           ] Pipelines running {:count=>1, :running_pipelines=>[:main], :non_running_pipelines=>[]}
+    [2025-01-16T22:49:09,409][INFO ][logstash.agent           ] Successfully started Logstash API endpoint {:port=>9600}
+    ---------------------------------------- 下面是 自己输入 HelloWorld, 后面是输出的 json 结果 ----------------------------------------
+    HelloWorld
+    {
+        "@timestamp" => 2025-01-16T14:49:20.616Z,
+          "@version" => "1",
+              "type" => "std",
+              "host" => "localhost.localdomain",
+              "tags" => [
+            [0] "add"
+        ],
+               "key" => "value",
+           "message" => "HelloWorld"
+    }
+
+2、读取文件 插件 chapter_02_input_001_stdin.conf
+
+
+
+这些东西以后再研究吧, 具体的案例可以参考 com.deepblue.inaction_05_elasticsearch.chapter_10 中的东西! 说实在的 用Logstash 收集日志在大厂都整合的不咋地!
+
+
+
+
+
+
+
+
+
