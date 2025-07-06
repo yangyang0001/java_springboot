@@ -89,7 +89,7 @@
 5、查看节点状态
     [root@localhost ~]# sh zkServer.sh status
     JMX enabled by default
-    Using config: /home/zookeeper-3.4.3/bin/../conf/zoo.cfglll
+    Using config: /home/zookeeper-3.4.3/bin/../conf/zoo.cfg
 
     Mode: follower
 
