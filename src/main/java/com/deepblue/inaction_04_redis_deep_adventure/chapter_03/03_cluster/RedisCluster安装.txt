@@ -41,7 +41,7 @@ mv redis_6479.conf 6479/
 mv redis_6579.conf 6579/
 mv redis_6679.conf 6679/
 
-
+cd /home/redis/bin
 ./redis-server ../6179/redis_6179.conf
 ./redis-server ../6279/redis_6279.conf
 ./redis-server ../6379/redis_6379.conf
