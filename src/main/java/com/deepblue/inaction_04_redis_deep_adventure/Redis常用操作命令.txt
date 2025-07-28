@@ -50,7 +50,13 @@ lrem key 值的个数 value	删除list中的key 对应的value值
 lindex key indexNum     下标从 left 开始, 查看 下标为 indexNum 的 元素; indexNum < 0时, -1: 倒数第一个, -2: 倒数第二个
 
 
-***************************** hash 类型的操作 **************************
+************************************************* hash 类型的操作, 类似于 json 类型 ************************************
+"key" : {
+    "field1" : "value1"
+    "field2" : "value2"
+    "field3" : "value3"
+}
+
 hash 的数据结构: 类似于 HashMap 数组 + 链表的结构!
 注意: 有相同的 key 时会报错; (error) WRONGTYPE Operation against a key holding the wrong kind of value
 
