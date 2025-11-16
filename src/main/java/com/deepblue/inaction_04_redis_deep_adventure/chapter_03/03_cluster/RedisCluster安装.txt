@@ -49,6 +49,12 @@ cd /home/redis/bin
 ./redis-server ../6579/redis_6579.conf
 ./redis-server ../6679/redis_6679.conf
 
+创建集群:[6.2.0 版本必须自己创建]
+cd /home/redis/bin
+./redis-cli --cluster create \
+192.168.188.96:6179 192.168.188.96:6279 192.168.188.96:6379 \
+192.168.188.96:6479 192.168.188.96:6579 192.168.188.96:6679 \
+--cluster-replicas 1 -a root
 
 -c 是官方提供的 -cluster 的意思!
 

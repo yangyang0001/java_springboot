@@ -8,6 +8,7 @@ yum install glibc-common
 yum install glibc-devel
 yum install gcc
 yum install make
+yum install jemalloc jemalloc-devel
 
 
 wget http://download.redis.io/releases/redis-5.0.0.tar.gz

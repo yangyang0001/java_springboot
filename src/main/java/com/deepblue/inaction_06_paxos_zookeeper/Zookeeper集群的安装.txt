@@ -16,6 +16,13 @@
     注意部分: zoo.cfg 的配置, 同时在 dataDir=/tmp/zookeeper 下创建 myid 对应 zoo.cfg 中的 server.id
 
 3、启动服务端
+    # 每个节点都写自己的 myid; 对应的值 为 server.id 中的 id 数值!
+    # server.1=192.168.188.66:2188:3181
+    # server.2=192.168.188.67:2188:3181
+    # server.3=192.168.188.68:2188:3181
+    # server.4=192.168.188.69:2188:3181:observer
+
+    [root@localhost ~]# echo 4 > /tmp/zookeeper/myid
     [root@localhost ~]# sh zkServer.sh start
     JMX enabled by default
     Using config: /home/zookeeper-3.4.3/bin/../conf/zoo.cfg
