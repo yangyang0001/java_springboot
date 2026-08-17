@@ -8,7 +8,7 @@ import javax.validation.constraints.Min;
 public class MineObject implements MineInterface {
 
     @Override
-    @Mine
+    @Mine("selectId")
     public Book selectId(long id) {
         System.out.println("selectId method invoke, id = " + id);
 
