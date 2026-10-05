@@ -1,0 +1,185 @@
+# Elasticsearch 频繁删除和块（Segment）的合并机制
+
+> 基础概念（segment 不可变、update = 删除 + 新增、TieredMergePolicy 参数）见 [`../ES数据变更.md`](../ES数据变更.md)，本文聚焦：**频繁删除会带来什么问题、底层到底发生了什么、segment 合并如何回收、以及工程上怎么规避**。
+
+## 1. 一次删除在底层发生了什么
+
+```
+DELETE /order_index/_doc/1001
+```
+
+1. **写 translog**：删除操作先记录到 translog，保证宕机可恢复。
+2. **Version Map 记录**：在内存的 LiveVersionMap 中记录该 `_id` 已删除（带 `_seq_no` / `_version`），用于后续并发写入的版本冲突检测。删除的版本信息会保留 `index.gc_deletes`（默认 **60s**）。
+3. **Lucene 标记删除**：
+   - 文档所在的旧 segment 不会被修改，只是在该 segment 的 **live docs 位图**（`.liv` 文件，老版本 Lucene 为 `.del`）中把这个 docId 标为不可见。
+   - ES 7.0+ 默认开启（8.x 强制开启）**soft deletes**：删除时还会写入一条“墓碑文档（tombstone）”，旧文档被软删除并保留一段时间，用于副本恢复（peer recovery）和 CCR 跨集群复制。
+4. **refresh 之后**：查询时自动过滤掉已删除文档，用户层面“看不到了”，但**磁盘空间没有释放**。
+
+所以：**删除 = 追加写一个标记**，真正的物理删除只发生在 segment merge 时。
+
+## 2. 频繁删除带来的问题
+
+| 问题 | 原因 |
+|---|---|
+| 磁盘占用不降反升 | 旧文档仍在 segment 中，墓碑文档、translog 还会额外占空间 |
+| 查询变慢 | 搜索时仍要遍历已删除文档再用位图过滤；词项统计（TF/IDF、BM25 的 docFreq）也包含已删除文档，导致**评分偏差** |
+| segment 数量增多 | 删除伴随大量小批量写入/refresh，产生大量小 segment |
+| merge 压力大 | 后台合并频繁，占用磁盘 IO 和 CPU，与写入/查询争抢资源 |
+| 内存开销 | 每个 segment 都有自己的 FST、doc values、文件句柄等常驻开销 |
+
+> 注意：`_count`、`hits.total` 不包含已删除文档，但 `_cat/indices` 的 `store.size` 包含它们占的空间。
+
+## 3. Segment 合并（Merge）如何回收删除
+
+### 3.1 合并过程
+
+```
+segment_A (100 docs, 30 deleted) ┐
+segment_B (80 docs,  10 deleted) ├──merge──> segment_D (210 docs, 0 deleted)
+segment_C (70 docs,   0 deleted) ┘
+```
+
+1. MergePolicy（默认 **TieredMergePolicy**）挑选要合并的 segment。
+2. MergeScheduler（**ConcurrentMergeScheduler**）在后台线程中执行合并：只把**存活文档**写入新 segment，已删除文档直接丢弃。
+3. 新 segment 写完并 commit / refresh 可见后，旧 segment 在没有搜索请求引用时被删除，**此时磁盘空间才真正释放**。
+
+> 合并期间新旧 segment 同时存在，**磁盘需预留空间**（最坏情况接近被合并数据量的一倍）。
+
+### 3.2 删除比例如何影响合并选择
+
+TieredMergePolicy 给候选合并打分时，会对删除比例高的 segment “加分”：
+
+- `index.merge.policy.deletes_pct_allowed`（默认 **20%**）：索引整体删除比例超过它时，合并策略会主动选择删除多的 segment 进行合并（甚至单个大 segment 自己重写一次），把删除比例压回阈值附近。
+- `index.merge.policy.expunge_deletes_allowed`（默认 **10%**）：`_forcemerge?only_expunge_deletes=true` 时，只合并删除比例超过该值的 segment。
+- `index.merge.policy.max_merged_segment`（默认 **5GB**）：接近该大小的 segment 一般不再参与普通合并，**只有当其中删除比例足够高时才会被单独重写**，代价很大。
+
+### 3.3 soft deletes 对回收的影响
+
+开启 soft deletes 后，被软删除的文档受 **retention lease** 保护，在保留期内（`index.soft_deletes.retention_lease.period`，默认 **12h**）merge 也**不会**把它们清掉。
+
+所以常见现象：刚删除大量数据后立即执行 `_forcemerge`，`docs.deleted` 并没有明显下降 —— 需要等保留期过去或副本/CCR 追上后再合并。
+
+### 3.4 合并调度与限流
+
+| 参数 | 默认值 | 说明 |
+|---|---|---|
+| `index.merge.scheduler.max_thread_count` | `max(1, min(4, CPU核数/2))` | 每个分片并发合并线程数，**机械硬盘建议设为 1** |
+| `index.merge.scheduler.max_merge_count` | `max_thread_count + 5` | 允许排队的合并数，超过后会**阻塞写入线程**（index throttling） |
+| `index.merge.scheduler.auto_throttle` | `true` | 自动根据合并积压情况调节合并 IO 速率 |
+
+当日志中出现 `now throttling indexing` 时，说明合并跟不上写入/删除速度，写入已被限流。
+
+## 4. 如何观察删除与合并状态
+
+```bash
+# 索引级：docs.count 与 docs.deleted
+GET _cat/indices/order_index?v&h=index,docs.count,docs.deleted,store.size
+
+# 分片 / segment 级：每个 segment 的文档数、删除数、大小
+GET _cat/segments/order_index?v&h=shard,segment,docs.count,docs.deleted,size,committed,searchable
+
+# 合并统计：当前合并数、累计合并耗时、被限流时间
+GET order_index/_stats/merge,docs?human
+
+# 查看是否有合并导致的写入限流
+GET _nodes/stats/indices/indexing?filter_path=**.throttle_time_in_millis
+```
+
+经验判断：
+- `docs.deleted / (docs.count + docs.deleted)` 长期 > 20%~30%，说明删除回收跟不上，或者存在大 segment 无法合并。
+- `merges.current` 长期不为 0、`total_throttled_time` 持续增长，说明合并是瓶颈。
+
+## 5. 手动触发合并
+
+```bash
+# 只清理删除比例高的 segment（相对轻量，推荐）
+POST /order_index/_forcemerge?only_expunge_deletes=true
+
+# 合并为 1 个 segment（重操作，只对不再写入的只读索引执行）
+POST /order_index/_forcemerge?max_num_segments=1
+```
+
+注意事项：
+- forcemerge 是**同步阻塞**的，大索引可能持续数小时，建议在低峰期执行。
+- **不要对仍在写入/删除的索引合并成 1 个 segment**：会产生超过 5GB 的超大 segment，之后的删除会长期堆积在里面，普通合并很难再处理它。
+- 合并后对只读索引可配合 `index.blocks.write: true` 防止再次写入。
+
+## 6. 工程实践：如何避免“频繁删除”
+
+### 6.1 按时间分索引，删索引代替删文档（最推荐）
+
+```
+order-2026.10.01
+order-2026.10.02
+order-2026.10.03   <- 写别名 order_write 指向这里
+```
+
+- 过期数据直接 `DELETE /order-2026.09.*`，**删除整个索引是元数据操作，磁盘立即释放**，没有任何 merge 成本。
+- 配合 **ILM（Index Lifecycle Management）** 的 rollover + delete 阶段自动完成；查询通过别名 `order_read` 覆盖多个索引。
+
+### 6.2 批量删除时控制节奏
+
+```bash
+POST /order_index/_delete_by_query?conflicts=proceed&slices=auto&requests_per_second=1000&wait_for_completion=false
+{
+  "query": { "range": { "createTime": { "lt": "now-90d" } } }
+}
+
+# 查看 / 动态调速
+GET _tasks?detailed=true&actions=*/delete/byquery
+POST _delete_by_query/<task_id>/_rethrottle?requests_per_second=500
+```
+
+- `_delete_by_query` 本质是 scroll + bulk delete，会产生海量删除标记，**必须限速**，并在完成后择机 `only_expunge_deletes`。
+- 如果删除量超过索引总量的一半，考虑 **reindex 保留数据到新索引 + 别名切换 + 删除旧索引**，通常比逐条删除更快、更干净。
+
+### 6.3 减少“隐式删除”（update）
+
+- 每次 update 都会产生一次删除。高频计数器、状态字段频繁变化的场景（如库存、浏览量）不适合直接放在 ES 文档里频繁更新，可以：
+  - 在应用侧聚合后批量更新；
+  - 把高频变动字段放在 Redis / DB，ES 只存相对稳定的检索字段；
+  - 使用 `_bulk` 合并同一文档的多次更新。
+
+### 6.4 合理设置 refresh 间隔
+
+- `index.refresh_interval` 默认 1s，每次 refresh 生成一个新 segment。批量导入/删除期间可调大（如 `30s`）或设为 `-1`，结束后再恢复，减少小 segment 数量和合并压力。
+
+## 7. 总结
+
+1. ES 删除只是**打标记**（live docs 位图 + soft delete 墓碑），不会立即释放空间。
+2. 空间回收**完全依赖 segment merge**，TieredMergePolicy 会优先合并删除比例高的 segment（`deletes_pct_allowed` 默认 20%）。
+3. soft deletes 的 retention lease 会让已删除文档**延迟**被清理（默认 12h）。
+4. 频繁删除会导致磁盘膨胀、查询变慢、评分偏差和合并 IO 压力。
+5. 最佳实践：**按时间分索引 + ILM 删除整个索引**；必须逐条删除时限速 `_delete_by_query`，并在低峰期 `_forcemerge?only_expunge_deletes=true`；不要对仍在写入的索引 forcemerge 到 1 个 segment。
+
+## 8. 插入、删除到可查询的时差
+
+ES 是**近实时（Near Real-Time）**搜索：写入成功不代表马上能搜到，中间隔着一次 refresh。
+
+```
+t=0ms      PUT /orders/_doc/1  → 写入内存 indexing buffer + translog，返回 201（毫秒级）
+           GET /orders/_doc/1  → 立即能读到（realtime GET）
+           _search             → 搜不到（文档还在 buffer，不在任何 segment 里）
+t≤1000ms   refresh（默认 refresh_interval=1s）→ buffer 生成新 segment，进入 OS 文件缓存
+           _search             → 能搜到了
+之后       flush（translog 达到 512MB 等）→ Lucene commit，segment fsync 落盘（与可见性无关）
+之后       merge（后台）       → 已删除文档被物理丢弃，磁盘空间释放
+```
+
+| 操作 | 什么时候能看到结果 | 时差 |
+|---|---|---|
+| 写入请求返回（index / bulk） | 写入主分片 buffer + translog，副本写完后返回 | 毫秒级 |
+| `GET /_doc/{id}`（默认 realtime=true） | 立即，未 refresh 时也能读到 | ≈ 0 |
+| `_search` / `_count` | 下一次 refresh 之后 | 0 ~ refresh_interval，默认 0 ~ 1s，平均约 0.5s |
+| 写入带 `?refresh=wait_for` | 请求阻塞到下一次 refresh 完成才返回 | 返回即可搜，写入响应变慢 ≤ 1s |
+| 写入带 `?refresh=true` | 立即强制 refresh | 返回即可搜，但每次产生小 segment，加重合并 |
+| 分片 search idle（7.0+） | 未显式设置 refresh_interval 的分片 30s 无查询时跳过定时 refresh，下次查询先等 refresh | 首次查询变慢 |
+| `DELETE /_doc/{id}` | GET 立即 404；_search 在下一次 refresh 前仍能搜到 | 0 ~ 1s |
+| 磁盘空间释放 | segment 合并完成且旧 segment 无引用后；soft deletes 保留期（默认 12h）内不清除 | 秒级 ~ 数小时 |
+
+结论：
+- 默认配置下，**写入/删除到 _search 可见的时差是 0 ~ 1s**，按 ID 的 GET 没有时差。
+- 调大 `refresh_interval`（如 30s）可以减少小 segment 和合并压力，但时差也会变成 0 ~ 30s。
+- 业务上需要"写完立刻能查到"时，用 `?refresh=wait_for`，不要每次都 `?refresh=true`。
+
+动态演示见同目录下的 `elasticsearch_写入删除与段合并动态图.html`（浏览器直接打开）。

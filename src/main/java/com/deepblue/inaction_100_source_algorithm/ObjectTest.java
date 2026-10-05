@@ -13,5 +13,7 @@ public class ObjectTest {
         System.out.println(aa == bb);
         System.out.println(aa.equals(bb));
 
+        System.out.println(Integer.MAX_VALUE);
+
     }
 }

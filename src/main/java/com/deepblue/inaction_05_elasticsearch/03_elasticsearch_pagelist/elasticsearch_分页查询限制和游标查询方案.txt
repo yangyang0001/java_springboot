@@ -1,0 +1,242 @@
+# Elasticsearch 分页查询限制和游标查询方案
+
+## 1. 普通分页：from + size
+
+```
+GET /order_index/_search
+{
+  "from": 20,
+  "size": 10,
+  "query": { "term": { "status": "PAID" } },
+  "sort": [ { "createTime": "desc" } ]
+}
+```
+
+### 1.1 限制：index.max_result_window
+
+- `from + size` 不能超过 `index.max_result_window`，默认 **10000**。
+- 超过会报错：
+  ```
+  Result window is too large, from + size must be less than or equal to: [10000] but was [10010].
+  ```
+- 可以调大，但**不推荐**：
+  ```
+  PUT /order_index/_settings
+  { "index.max_result_window": 50000 }
+  ```
+
+### 1.2 为什么要限制：深度分页的代价
+
+ES 查询分为 Query 和 Fetch 两个阶段（query_then_fetch）：
+
+```
+请求 from=9990, size=10，索引有 5 个主分片
+
+Query 阶段：每个分片各自排序，取前 from+size = 10000 条 (docId + 排序值) 返回协调节点
+            协调节点收到 5 * 10000 = 50000 条，在内存中全局排序，取第 9990~10000 条
+Fetch 阶段：只对最终这 10 条去对应分片取 _source
+```
+
+- 每个分片要排序 `from + size` 条，协调节点要排序 `分片数 * (from + size)` 条。
+- 页越深，CPU、内存、网络开销线性增长，极端情况下会引起协调节点 OOM / 频繁 GC。
+- 所以 10000 的限制是一种保护机制。
+
+### 1.3 总数统计的限制：track_total_hits
+
+- ES 7.0+ 默认 `track_total_hits: 10000`，命中超过 1 万时返回：
+  ```
+  "total": { "value": 10000, "relation": "gte" }
+  ```
+- 需要精确总数时设置 `"track_total_hits": true`（命中量大时会变慢），也可以设为具体数值上限。
+
+### 1.4 适用场景
+
+- 页面跳页（第 1、2、3...页），且只需要浏览前若干页的场景。
+- 产品层面限制最大页数（例如最多展示 100 页），这也是各大搜索引擎的通用做法。
+
+
+## 2. 游标方案一：Scroll（滚动查询）
+
+### 2.1 用法
+
+```
+# 第一次：创建快照，保持 1 分钟
+POST /order_index/_search?scroll=1m
+{
+  "size": 1000,
+  "query": { "match_all": {} },
+  "sort": [ "_doc" ]
+}
+# 返回 _scroll_id 和第一批数据
+
+# 后续：用 scroll_id 拉取下一批，同时续期
+POST /_search/scroll
+{
+  "scroll": "1m",
+  "scroll_id": "DXF1ZXJ5QW5kRmV0Y2gBAAAAAAAAAD4WYm9laVYtZndUQlNsdDcwakFMNjU1QQ=="
+}
+
+# 结束后必须清除，释放资源
+DELETE /_search/scroll
+{ "scroll_id": ["DXF1ZXJ5QW5kRmV0Y2gBAAAAAAAAAD4WYm9laVYtZndUQlNsdDcwakFMNjU1QQ=="] }
+```
+
+### 2.2 原理
+
+- 第一次请求时在每个分片上创建一个**搜索上下文（search context）**，相当于对当时的 segment 做了一个**快照**。
+- 快照期间被引用的旧 segment 不能被 merge 删除，会**占用文件句柄和磁盘空间**。
+- 按 `_doc` 排序效率最高（不做评分和排序，按存储顺序返回）。
+
+### 2.3 并行：Sliced Scroll
+
+```
+POST /order_index/_search?scroll=1m
+{
+  "slice": { "id": 0, "max": 4 },
+  "size": 1000,
+  "query": { "match_all": {} }
+}
+# 另起 3 个线程分别使用 id = 1、2、3
+```
+
+### 2.4 限制与缺点
+
+- 数据是**快照**，看不到创建之后的新增/修改/删除，不具备实时性。
+- 不能跳页，只能一批一批往后拉。
+- 每个 scroll 都占用服务端资源，节点级最多打开 `search.max_open_scroll_context`（默认 **500**）个。
+- 忘记清理或 keep_alive 过长会导致资源泄露。
+- **ES 7.x 起官方不再推荐用 scroll 做深度分页**，推荐用 `search_after + PIT`。
+
+### 2.5 适用场景
+
+- 离线导出、全量数据迁移、reindex 之类的**批处理任务**，不适合面向用户的实时分页。
+
+
+## 3. 游标方案二：search_after
+
+### 3.1 用法
+
+```
+# 第一页
+GET /order_index/_search
+{
+  "size": 10,
+  "query": { "term": { "status": "PAID" } },
+  "sort": [
+    { "createTime": "desc" },
+    { "orderId": "asc" }          <- 唯一字段做 tiebreaker
+  ]
+}
+# 每条结果都带有 sort 值，例如最后一条: "sort": [1759622400000, "O20261005001"]
+
+# 下一页：把上一页最后一条的 sort 值传入 search_after
+GET /order_index/_search
+{
+  "size": 10,
+  "query": { "term": { "status": "PAID" } },
+  "sort": [
+    { "createTime": "desc" },
+    { "orderId": "asc" }
+  ],
+  "search_after": [1759622400000, "O20261005001"]
+}
+```
+
+### 3.2 原理
+
+- 每个分片只需要找出排序值 **在 search_after 之后** 的前 `size` 条，协调节点只需排序 `分片数 * size` 条。
+- 开销与页深无关，**可以无限往后翻**，不受 `max_result_window` 限制。
+- 无状态，服务端不保存上下文。
+
+### 3.3 注意事项
+
+- 排序字段组合必须**唯一**，否则排序值相同的文档可能在翻页时被跳过或重复。
+  - 推荐加一个业务唯一字段（如 orderId，keyword 类型并开启 doc_values）作为最后的排序字段。
+  - 不要用 `_id` 排序（需要加载 fielddata，内存开销大）。
+- 不能跳页，只能"上一页/下一页"（上一页可以反转排序方向实现）。
+- 不使用 PIT 时，翻页过程中数据有变更（新增/删除/refresh），结果可能不一致。
+
+
+## 4. 游标方案三（推荐）：PIT + search_after
+
+ES 7.10+ 提供 **Point In Time（PIT）**，把"一致性快照"和"查询"解耦，取代 scroll 做深度分页。
+
+### 4.1 用法
+
+```
+# 1) 创建 PIT
+POST /order_index/_pit?keep_alive=1m
+# 返回: { "id": "46ToAwMDaWR5BXV1aWQy..." }
+
+# 2) 第一页：请求路径中不写索引名，通过 pit.id 指定
+GET /_search
+{
+  "size": 10,
+  "query": { "term": { "status": "PAID" } },
+  "pit": { "id": "46ToAwMDaWR5BXV1aWQy...", "keep_alive": "1m" },
+  "sort": [
+    { "createTime": "desc" },
+    { "_shard_doc": "asc" }       <- 7.12+ PIT 内置的唯一 tiebreaker
+  ]
+}
+
+# 3) 下一页：带上一页最后一条的 sort 值，使用响应中返回的最新 pit.id
+GET /_search
+{
+  "size": 10,
+  "query": { "term": { "status": "PAID" } },
+  "pit": { "id": "<上一次响应中的 pit_id>", "keep_alive": "1m" },
+  "sort": [
+    { "createTime": "desc" },
+    { "_shard_doc": "asc" }
+  ],
+  "search_after": [1759622400000, 4294967298]
+}
+
+# 4) 结束后关闭
+DELETE /_pit
+{ "id": "46ToAwMDaWR5BXV1aWQy..." }
+```
+
+### 4.2 优点
+
+- 翻页过程中数据视图一致（同一个快照）。
+- 一个 PIT 可以被多个查询复用，查询条件可以变化，比 scroll 更灵活。
+- `_shard_doc` 免去自己维护唯一排序字段的麻烦。
+- 也支持 slice 并行导出。
+
+### 4.3 注意事项
+
+- PIT 同样会阻止旧 segment 被删除，`keep_alive` 只需覆盖"两次请求之间"的间隔，不需要覆盖整个翻页过程。
+- 用完及时 `DELETE /_pit`。
+
+
+## 5. 方案对比
+
+| 方案 | 深度分页 | 跳页 | 实时性 / 一致性 | 服务端状态 | 典型场景 |
+|---|---|---|---|---|---|
+| from + size | 否（默认 ≤ 10000） | 支持 | 实时 | 无 | 前若干页的普通列表 |
+| scroll | 支持 | 不支持 | 快照，不实时 | 有（search context） | 离线导出、数据迁移（旧版本） |
+| search_after | 支持 | 不支持 | 实时，但可能不一致 | 无 | APP 下拉加载、"下一页" |
+| PIT + search_after | 支持 | 不支持 | 快照一致 | 有（PIT） | 深度分页、全量导出（7.10+ 推荐） |
+
+
+## 6. 业务落地建议
+
+1. **PC 后台列表（需要页码）**：使用 from + size，限制最大可翻页数（如 `from + size <= 10000`），并引导用户通过更精确的筛选条件缩小范围。
+2. **APP / 小程序瀑布流**：使用 search_after，接口对外暴露一个**游标（cursor）**而不是页码：
+   ```
+   请求: GET /api/orders?size=20&cursor=
+   响应: { "list": [...], "nextCursor": "WzE3NTk2MjI0MDAwMDAsIk8yMDI2MTAwNTAwMSJd", "hasMore": true }
+   ```
+   `nextCursor` 为最后一条 sort 值数组的 Base64 编码，前端原样回传即可，不暴露内部字段。
+3. **全量导出 / 数据同步**：使用 PIT + search_after（ES 7.10 以下用 scroll），配合 slice 并行，`size` 设置为 1000~5000，结束后清理 PIT / scroll。
+4. **统计总数**：大数据量时不要每次都 `track_total_hits: true`，可显示"10000+"，或单独异步统计。
+
+
+## 7. 总结
+
+- from + size 受 `index.max_result_window`（默认 10000）限制，本质原因是深度分页在分片和协调节点上的排序开销随页深线性增长。
+- scroll 基于快照，适合批处理，不适合实时分页，7.x 后不再推荐用于深度分页。
+- search_after 基于上一页最后一条的排序值做游标，开销与页深无关，但排序字段必须唯一，且不能跳页。
+- ES 7.10+ 推荐 **PIT + search_after** 作为深度分页和导出的标准方案。

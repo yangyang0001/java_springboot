@@ -1,0 +1,584 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ES 段合并动态图</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Noto+Sans+SC:wght@400;500;700&display=swap">
+<style>
+/* Layout: 顶部控制条；左侧 segment 画布 + 时间线，右侧状态 / 查询探针 / 事件日志；窄屏单列；底部时差对照表 */
+:root {
+  --bg: #F1F4F5; --surface: #FFFFFF; --ink: #15222A; --muted: #5A6A74; --line: #D3DCE1;
+  --accent: #0E6B8A; --live: #2E8B62; --pending: #C9820F; --del: #C4432E; --buffer: #6A55C8;
+  --f-body: "Noto Sans SC", system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, Consolas, "Courier New", monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0F171C; --surface: #16222A; --ink: #E3EBEF; --muted: #8FA2AD; --line: #2A3A44;
+    --accent: #4DB3D6; --live: #4CC38A; --pending: #F0AE3C; --del: #F07058; --buffer: #9C8CF0;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0F171C; --surface: #16222A; --ink: #E3EBEF; --muted: #8FA2AD; --line: #2A3A44;
+  --accent: #4DB3D6; --live: #4CC38A; --pending: #F0AE3C; --del: #F07058; --buffer: #9C8CF0;
+  color-scheme: dark;
+}
+body { background: var(--bg); color: var(--ink); font-family: var(--f-body); line-height: 1.6; }
+.wrap { max-width: 1120px; margin: 0 auto; padding-inline: 16px; padding-block: 28px 48px; display: flex; flex-direction: column; gap: 20px; }
+.eyebrow { font-family: var(--f-mono); font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--accent); margin: 0 0 6px; }
+h1 { font-size: clamp(1.5rem, 3.2vw, 2.1rem); line-height: 1.25; margin: 0; font-weight: 700; text-wrap: balance; }
+h2 { font-size: 15px; margin: 0; font-weight: 700; text-wrap: balance; }
+.lede { max-width: 68ch; color: var(--muted); margin: 8px 0 0; }
+.controls { display: flex; flex-wrap: wrap; gap: 12px 22px; align-items: flex-end; padding: 14px 16px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
+.ctl { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
+.ctl output { font-family: var(--f-mono); color: var(--ink); }
+.ctl input[type=range] { width: 150px; accent-color: var(--accent); }
+select { font: inherit; font-size: 13px; padding: 4px 8px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); }
+.btns { display: flex; flex-wrap: wrap; gap: 8px; }
+button { font: inherit; font-size: 13px; padding: 6px 12px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); cursor: pointer; }
+button:hover { border-color: var(--accent); }
+button.primary { background: var(--accent); border-color: var(--accent); color: var(--surface); font-weight: 500; }
+button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.grid { display: grid; grid-template-columns: minmax(0, 1fr) 310px; gap: 20px; align-items: start; }
+@media (max-width: 880px) { .grid { grid-template-columns: minmax(0, 1fr); } }
+.col { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; min-width: 0; }
+.panel-h { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 6px 16px; margin-bottom: 10px; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12px; color: var(--muted); }
+.sw { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+canvas { display: block; width: 100%; }
+.cap { font-size: 12px; color: var(--muted); margin: 8px 0 0; }
+.headline { display: flex; flex-direction: column; gap: 2px; padding-bottom: 12px; margin-bottom: 12px; border-bottom: 1px solid var(--line); }
+.headline .k { font-size: 12px; color: var(--muted); }
+.headline .v { font-family: var(--f-mono); font-size: 26px; font-weight: 600; color: var(--accent); font-variant-numeric: tabular-nums; line-height: 1.2; }
+.headline .s { font-size: 12px; color: var(--muted); font-family: var(--f-mono); }
+.stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 12px; margin: 0; }
+.stats > div { min-width: 0; }
+.stats dt { font-size: 11.5px; color: var(--muted); }
+.stats dd { margin: 0; font-family: var(--f-mono); font-size: 16px; font-variant-numeric: tabular-nums; }
+.probe ol, .log ol { list-style: none; padding: 0; margin: 10px 0 0; display: flex; flex-direction: column; }
+.probe ol { gap: 8px; }
+.probe li { font-size: 12.5px; padding: 8px 10px; border-radius: 6px; background: var(--bg); overflow-wrap: anywhere; }
+.probe code, .ref code, .note code { font-family: var(--f-mono); font-size: 12px; }
+.st { font-family: var(--f-mono); font-weight: 600; }
+.ok { color: var(--live); } .wait { color: var(--pending); } .bad { color: var(--del); }
+.log ol { gap: 6px; font-size: 12.5px; margin: 0; }
+.log li { display: grid; grid-template-columns: 54px minmax(0, 1fr); gap: 8px; }
+.log time { font-family: var(--f-mono); color: var(--muted); font-variant-numeric: tabular-nums; }
+.k-refresh { color: var(--live); } .k-merge { color: var(--accent); } .k-flush { color: var(--buffer); } .k-op { color: var(--pending); }
+.tablewrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; min-width: 680px; }
+th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-size: 12px; color: var(--muted); font-weight: 500; }
+td.big { font-family: var(--f-mono); font-weight: 600; color: var(--accent); white-space: nowrap; }
+.note { font-size: 12px; color: var(--muted); margin: 10px 0 0; max-width: 90ch; }
+</style>
+
+<div class="wrap">
+  <header>
+    <p class="eyebrow">Elasticsearch / Lucene · near real-time</p>
+    <h1>频繁插入、删除与段合并</h1>
+    <p class="lede">每个小方格是一篇文档。写入先进入内存 buffer，此时搜索不到；每次 refresh 把 buffer 生成一个新 segment，文档才能被搜索。删除只是打标记，段合并时已删除文档才被真正丢弃。</p>
+  </header>
+
+  <section class="controls" aria-label="仿真参数">
+    <div class="btns">
+      <button id="play" class="primary" type="button">暂停</button>
+      <button id="reset" type="button">重置</button>
+    </div>
+    <label class="ctl" for="rate">插入速率 <output id="rateOut">40 篇/s</output>
+      <input id="rate" type="range" min="5" max="150" step="5" value="40">
+    </label>
+    <label class="ctl" for="del">删除比例（每插入 100 篇删除）<output id="delOut">35 篇</output>
+      <input id="del" type="range" min="0" max="90" step="5" value="35">
+    </label>
+    <label class="ctl" for="refresh">refresh_interval
+      <select id="refresh">
+        <option value="1" selected>1s（默认）</option>
+        <option value="5">5s</option>
+        <option value="30">30s</option>
+        <option value="-1">-1（关闭自动 refresh）</option>
+      </select>
+    </label>
+    <label class="ctl" for="speed">播放速度
+      <select id="speed">
+        <option value="0.25">0.25×</option>
+        <option value="0.5">0.5×</option>
+        <option value="1" selected>1×</option>
+        <option value="3">3×</option>
+      </select>
+    </label>
+    <div class="btns">
+      <button id="manualRefresh" type="button">POST _refresh</button>
+      <button id="expunge" type="button">_forcemerge?only_expunge_deletes</button>
+    </div>
+  </section>
+
+  <div class="grid">
+    <div class="col">
+      <section class="panel">
+        <div class="panel-h">
+          <h2>Segment 视图（单个分片）</h2>
+          <div class="legend">
+            <span><i class="sw" style="background:var(--buffer)"></i>buffer 中，搜不到</span>
+            <span><i class="sw" style="background:var(--live)"></i>可搜索</span>
+            <span><i class="sw" style="background:var(--pending)"></i>已删除，refresh 前仍可搜到</span>
+            <span><i class="sw" style="background:var(--del)"></i>已标记删除，仍占磁盘</span>
+          </div>
+        </div>
+        <canvas id="seg" aria-label="segment 与文档状态动画"></canvas>
+        <p class="cap">虚线框是正在合并的 segment，底部进度条为合并进度；刚生成的 segment 会短暂高亮。合并只把存活文档写进新 segment。</p>
+      </section>
+
+      <section class="panel">
+        <div class="panel-h">
+          <h2>插入 → 可搜索 时间线</h2>
+          <span class="legend" id="tlNote"></span>
+        </div>
+        <canvas id="tl" aria-label="文档写入到可搜索的时间线"></canvas>
+        <p class="cap">每条横线是一篇文档：左端是写入时间，右端是被 refresh 变为可搜索的时间，竖虚线是 refresh。线越长，查询时差越大；红线表示还没 refresh 就被删掉的文档。</p>
+      </section>
+    </div>
+
+    <aside class="col">
+      <section class="panel">
+        <div class="headline">
+          <span class="k">写入 → _search 可见，平均时差</span>
+          <span class="v" id="latAvg">–</span>
+          <span class="s" id="latMore">–</span>
+        </div>
+        <dl class="stats">
+          <div><dt>仿真时间</dt><dd id="sTime">0.0s</dd></div>
+          <div><dt>segments</dt><dd id="sSegs">0</dd></div>
+          <div><dt>docs.count（可搜索）</dt><dd id="sCount">0</dd></div>
+          <div><dt>docs.deleted</dt><dd id="sDeleted">0</dd></div>
+          <div><dt>删除占比</dt><dd id="sRatio">0%</dd></div>
+          <div><dt>buffer 中（搜不到）</dt><dd id="sBuffer">0</dd></div>
+          <div><dt>合并次数</dt><dd id="sMerges">0</dd></div>
+          <div><dt>合并物理清除</dt><dd id="sPurged">0</dd></div>
+        </dl>
+      </section>
+
+      <section class="panel probe">
+        <div class="panel-h"><h2>查询探针</h2></div>
+        <button id="probe" type="button">写入一篇文档并立即查询</button>
+        <ol id="probeOut">
+          <li>点击后会写入一篇不会被随机删除的文档，并持续比对 <code>GET</code> 与 <code>_search</code> 的结果。</li>
+        </ol>
+      </section>
+
+      <section class="panel log">
+        <div class="panel-h"><h2>事件</h2></div>
+        <ol id="log"></ol>
+      </section>
+    </aside>
+  </div>
+
+  <section class="panel ref">
+    <div class="panel-h"><h2>插入、删除与查询的时差对照</h2></div>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>操作</th><th>什么时候能看到结果</th><th>时差</th></tr></thead>
+        <tbody>
+          <tr><td>写入请求返回<br><code>PUT /_doc/1</code>、<code>_bulk</code></td><td>写入主分片的 buffer 和 translog，副本也写完后返回。默认 <code>index.translog.durability=request</code>，每个请求返回前 fsync translog。</td><td class="big">毫秒级</td></tr>
+          <tr><td>按 ID 读取<br><code>GET /_doc/1</code></td><td>默认 <code>realtime=true</code>：文档还没 refresh 时也能读到（读 translog 或对该分片触发一次内部 refresh）。</td><td class="big">≈ 0</td></tr>
+          <tr><td>搜索<br><code>_search</code>、<code>_count</code></td><td>只能搜到已 refresh 的 segment。写入后要等到下一次 refresh。</td><td class="big">0 ~ 1s<br>平均约 0.5s</td></tr>
+          <tr><td>写入时带 <code>?refresh=wait_for</code></td><td>请求一直等到下一次 refresh 完成才返回，返回后立即可搜。</td><td class="big">写入变慢 ≤ 1s</td></tr>
+          <tr><td>写入时带 <code>?refresh=true</code></td><td>立即强制 refresh，返回后立即可搜。每次都产生一个小 segment，高频使用会加重合并压力。</td><td class="big">≈ 0，代价高</td></tr>
+          <tr><td>分片 search idle（7.0+）</td><td>未显式设置 <code>refresh_interval</code> 的分片 30s 没有查询时，跳过定时 refresh；下一次查询先等 refresh 再执行。</td><td class="big">首次查询变慢</td></tr>
+          <tr><td>删除<br><code>DELETE /_doc/1</code></td><td><code>GET</code> 立即返回 404；<code>_search</code> 在下一次 refresh 之前仍能搜到这篇文档。</td><td class="big">0 ~ 1s</td></tr>
+          <tr><td>磁盘空间释放</td><td>包含该文档的 segment 被合并、且旧 segment 不再被搜索 / scroll / PIT 引用后。soft deletes 保留期（默认 12h）内不会被清除。</td><td class="big">秒级 ~ 数小时</td></tr>
+          <tr><td>flush（Lucene commit）</td><td>translog 达到 <code>index.translog.flush_threshold_size</code>（默认 512MB）等条件时执行。只影响持久化和恢复，与是否可搜索无关。</td><td class="big">与可见性无关</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note">动画是缩小比例的示意：<code>segments_per_tier</code> 取 4（ES 默认 10），单个 segment 上限 480 篇代表 <code>max_merged_segment</code> 5GB，<code>deletes_pct_allowed</code> 为 20%，translog 3000 次操作代表 512MB。存活文档超过 2400 篇后，删除速度自动提高到与插入相同，让画面保持在可看的规模。</p>
+  </section>
+</div>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const segCv = $('seg'), tlCv = $('tl');
+  const segCtx = segCv.getContext('2d'), tlCtx = tlCv.getContext('2d');
+  const MONO = '"JetBrains Mono", ui-monospace, Consolas, monospace';
+  const CFG = { segPerTier: 4, floor: 16, maxSeg: 480, deletesPct: 0.20, expungePct: 0.10, threads: 1, flushOps: 3000, liveCap: 2400 };
+  const P = { rate: 40, del: 35, refresh: 1, speed: 1 };
+
+  let C = {};
+  function readColors() {
+    const cs = getComputedStyle(document.documentElement);
+    for (const k of ['ink', 'muted', 'line', 'accent', 'live', 'pending', 'del', 'buffer', 'surface', 'bg']) C[k] = cs.getPropertyValue('--' + k).trim();
+  }
+  readColors();
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', readColors);
+  new MutationObserver(readColors).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+
+  let S;
+  function reset() {
+    S = { t: 0, acc: 0, delAcc: 0, nextId: 1, nextSeg: 0, buffer: [], segs: [], live: [], pending: [], lastRefresh: 0,
+          merges: [], queue: [], lat: [], refreshMarks: [], marks: [], log: [], translog: 0,
+          tot: { merges: 0, purged: 0, flush: 0 }, probe: null };
+  }
+
+  function log(t, text, kind) {
+    S.log.unshift({ t, text, kind });
+    if (S.log.length > 40) S.log.length = 40;
+  }
+
+  // ---- 写入 / 删除 ----
+  function insert(t, protect) {
+    const d = { id: S.nextId++, tIns: t, tVis: null, tGone: null, seg: null, del: false, pend: false, li: -1 };
+    S.buffer.push(d);
+    if (!protect) { d.li = S.live.length; S.live.push(d); }
+    S.marks.push(d);
+    S.translog++;
+    return d;
+  }
+  function removeLive(d) {
+    const last = S.live.pop();
+    if (last !== d) { S.live[d.li] = last; last.li = d.li; }
+    d.li = -1;
+  }
+  function remove(t) {
+    if (!S.live.length) return;
+    const d = S.live[Math.floor(Math.random() * S.live.length)];
+    removeLive(d);
+    S.translog++;
+    if (!d.seg) {                       // 还在 buffer 里，直接丢弃
+      const i = S.buffer.indexOf(d);
+      if (i >= 0) S.buffer.splice(i, 1);
+      d.tGone = t;
+      return;
+    }
+    d.pend = true;                      // 已在 segment 中：refresh 后删除才对搜索生效
+    S.pending.push(d);
+  }
+
+  // ---- refresh / flush ----
+  function refresh(t, manual) {
+    const n = S.buffer.length, nd = S.pending.length;
+    if (n) {
+      const s = { name: '_' + (S.nextSeg++).toString(36), docs: S.buffer, merging: false, flash: t };
+      for (const d of s.docs) { d.seg = s; d.tVis = t; S.lat.push(t - d.tIns); }
+      if (S.lat.length > 500) S.lat.splice(0, S.lat.length - 500);
+      S.segs.push(s);
+      S.buffer = [];
+    }
+    for (const d of S.pending) { d.pend = false; d.del = true; }
+    S.pending = [];
+    S.lastRefresh = t;
+    S.refreshMarks.push(t);
+    if (n || nd || manual) log(t, `refresh：${n} 篇写入生成新 segment，变为可搜索${nd ? `；${nd} 条删除对搜索生效` : ''}`, 'refresh');
+    if (S.translog >= CFG.flushOps) {
+      S.translog = 0; S.tot.flush++;
+      log(t, 'flush：translog 达到阈值，执行 Lucene commit 并清空 translog', 'flush');
+    }
+    maybeMerge(t);
+  }
+
+  // ---- 段合并（简化版 TieredMergePolicy） ----
+  const delCount = s => { let k = 0; for (const d of s.docs) if (d.del) k++; return k; };
+
+  function pickMerge() {
+    const info = S.segs.filter(s => !s.merging).map(s => {
+      const n = s.docs.length, dl = delCount(s);
+      return { s, n, live: n - dl, ratio: n ? dl / n : 0 };
+    });
+    const tiers = new Map();
+    for (const x of info) {
+      if (x.live >= CFG.maxSeg / 2) continue;           // 接近上限的大段不参与普通合并
+      const tier = Math.max(0, Math.floor(Math.log(Math.max(x.live, CFG.floor) / CFG.floor) / Math.log(CFG.segPerTier)));
+      if (!tiers.has(tier)) tiers.set(tier, []);
+      tiers.get(tier).push(x);
+    }
+    for (const tier of [...tiers.keys()].sort((a, b) => a - b)) {
+      const g = tiers.get(tier);
+      if (g.length < CFG.segPerTier) continue;
+      g.sort((a, b) => a.n * (1 - a.ratio) ** 2 - b.n * (1 - b.ratio) ** 2);  // 删除占比高的优先
+      const pick = []; let sum = 0;
+      for (const x of g) {
+        if (pick.length === CFG.segPerTier || sum + x.live > CFG.maxSeg) break;
+        pick.push(x.s); sum += x.live;
+      }
+      if (pick.length >= 2) return { segs: pick, why: `同层 segment 达到 ${CFG.segPerTier} 个` };
+    }
+    const tn = info.reduce((a, x) => a + x.n, 0), td = info.reduce((a, x) => a + x.n - x.live, 0);
+    if (tn && td / tn > CFG.deletesPct) {
+      const worst = info.filter(x => x.ratio > CFG.deletesPct).sort((a, b) => b.ratio - a.ratio)[0];
+      if (worst) return { segs: [worst.s], why: `删除占比超过 ${CFG.deletesPct * 100}%，单独重写` };
+    }
+    return null;
+  }
+
+  function startMerge(t, plan) {
+    const drop = new Set(); let total = 0;
+    for (const s of plan.segs) { s.merging = true; for (const d of s.docs) { total++; if (d.del) drop.add(d); } }
+    S.merges.push({ segs: plan.segs, drop, start: t, dur: 0.4 + total * 0.003 });
+    log(t, `开始合并 ${plan.segs.map(s => s.name).join(' + ')}（${plan.why}），将丢弃 ${drop.size} 篇已删除文档`, 'merge');
+  }
+
+  function finishMerge(t, m) {
+    const docs = [];
+    for (const s of m.segs) for (const d of s.docs) if (!m.drop.has(d)) docs.push(d);
+    const idx = S.segs.indexOf(m.segs[0]);
+    S.segs = S.segs.filter(s => !m.segs.includes(s));
+    let name = '（空）';
+    if (docs.length) {
+      const ns = { name: '_' + (S.nextSeg++).toString(36), docs, merging: false, flash: t };
+      for (const d of docs) d.seg = ns;
+      S.segs.splice(Math.min(Math.max(idx, 0), S.segs.length), 0, ns);
+      name = ns.name;
+    }
+    S.tot.merges++; S.tot.purged += m.drop.size;
+    log(t, `合并完成 → ${name}（${docs.length} 篇），物理清除 ${m.drop.size} 篇，旧 segment 删除后释放磁盘`, 'merge');
+  }
+
+  function maybeMerge(t) {
+    while (S.queue.length) {
+      const s = S.queue.shift();
+      if (S.segs.includes(s) && !s.merging) startMerge(t, { segs: [s], why: 'only_expunge_deletes' });
+    }
+    while (S.merges.length < CFG.threads) {
+      const p = pickMerge();
+      if (!p) break;
+      startMerge(t, p);
+    }
+  }
+
+  // ---- 仿真步进 ----
+  function step(dt) {
+    const end = S.t + dt;
+    while (S.t < end - 1e-9) {
+      const h = Math.min(0.01, end - S.t);
+      S.t += h;
+      const t = S.t;
+      S.acc += P.rate * h;
+      while (S.acc >= 1) {
+        S.acc -= 1;
+        insert(t, false);
+        S.delAcc += S.live.length > CFG.liveCap ? 1 : P.del / 100;
+        while (S.delAcc >= 1) { S.delAcc -= 1; remove(t); }
+      }
+      if (P.refresh > 0 && t - S.lastRefresh >= P.refresh) refresh(t, false);
+      for (const m of S.merges.slice()) {
+        if (t >= m.start + m.dur) { S.merges.splice(S.merges.indexOf(m), 1); finishMerge(t, m); maybeMerge(t); }
+      }
+    }
+    while (S.marks.length && S.marks[0].tIns < S.t - 120 && (S.marks[0].tVis !== null || S.marks[0].tGone !== null)) S.marks.shift();
+    while (S.refreshMarks.length && S.refreshMarks[0] < S.t - 120) S.refreshMarks.shift();
+  }
+
+  // ---- 绘制 ----
+  function fit(cv, ctx, h) {
+    const dpr = window.devicePixelRatio || 1, w = cv.clientWidth;
+    if (cv.width !== Math.round(w * dpr) || cv.height !== Math.round(h * dpr)) {
+      cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); cv.style.height = h + 'px';
+    }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, w, h);
+    return w;
+  }
+  function box(n, c, minW) {
+    const cols = Math.max(6, Math.ceil(Math.sqrt(n * 2.2)));
+    const rows = Math.max(1, Math.ceil(n / cols));
+    return { cols, w: Math.max(minW, cols * (c + 1) - 1 + 12), h: rows * (c + 1) - 1 + 12 + 16 };
+  }
+  function cellColor(d, inBuf) {
+    if (inBuf) return C.buffer;
+    if (d.del) return C.del;
+    if (d.pend) return C.pending;
+    return C.live;
+  }
+
+  function drawSegs() {
+    const W = segCv.clientWidth || 600, c = W < 520 ? 4 : 5, gap = 10;
+    const items = [{ buf: true, docs: S.buffer }].concat(S.segs.map(s => ({ s, docs: s.docs })));
+    let x = 0, y = 0, rowH = 0;
+    const pos = [];
+    for (const it of items) {
+      const b = box(Math.max(it.docs.length, it.buf ? 30 : 1), c, it.buf ? 168 : 86);
+      if (x > 0 && x + b.w > W) { x = 0; y += rowH + gap; rowH = 0; }
+      pos.push({ it, x, y, b });
+      x += b.w + gap; rowH = Math.max(rowH, b.h);
+    }
+    const H = Math.max(140, y + rowH + 2);
+    const ctx = segCtx;
+    fit(segCv, ctx, H);
+    ctx.textBaseline = 'top';
+    for (const { it, x, y, b } of pos) {
+      const s = it.s;
+      ctx.save();
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = C.line;
+      if (it.buf) { ctx.strokeStyle = C.buffer; ctx.setLineDash([4, 3]); }
+      if (s && s.merging) { ctx.strokeStyle = C.accent; ctx.lineWidth = 1.5; ctx.setLineDash([5, 3]); ctx.lineDashOffset = -S.t * 30; }
+      if (s && !s.merging && S.t - s.flash < 1.2) { ctx.strokeStyle = C.accent; ctx.lineWidth = 2.5 - (S.t - s.flash) * 1.2; }
+      ctx.beginPath(); ctx.roundRect(x + 0.5, y + 0.5, b.w - 1, b.h - 1, 5); ctx.stroke();
+      ctx.restore();
+
+      ctx.font = `11px ${MONO}`;
+      ctx.fillStyle = it.buf ? C.buffer : C.muted;
+      let label;
+      if (it.buf) label = `buffer · ${it.docs.length} 篇 · 搜不到`;
+      else {
+        const n = s.docs.length, dl = delCount(s);
+        label = `${s.name} · ${n} · 删${Math.round(dl / Math.max(n, 1) * 100)}%`;
+        if (ctx.measureText(label).width > b.w - 12) label = `${s.name} · ${n}`;
+      }
+      ctx.fillText(label, x + 6, y + 5);
+
+      const gx = x + 6, gy = y + 21;
+      for (let i = 0; i < it.docs.length; i++) {
+        const d = it.docs[i];
+        ctx.fillStyle = cellColor(d, it.buf);
+        ctx.globalAlpha = d.del ? 0.75 : 1;
+        ctx.fillRect(gx + (i % b.cols) * (c + 1), gy + Math.floor(i / b.cols) * (c + 1), c, c);
+      }
+      ctx.globalAlpha = 1;
+
+      if (s && s.merging) {
+        const m = S.merges.find(m => m.segs.includes(s));
+        if (m) {
+          const p = Math.min(1, (S.t - m.start) / m.dur);
+          ctx.fillStyle = C.accent;
+          ctx.fillRect(x + 3, y + b.h - 4, (b.w - 6) * p, 2);
+        }
+      }
+    }
+  }
+
+  function drawTimeline() {
+    const H = 180, ctx = tlCtx;
+    const W = fit(tlCv, ctx, H);
+    const win = P.refresh > 0 ? Math.min(90, Math.max(6, P.refresh * 4)) : 20;
+    const t1 = S.t, t0 = t1 - win, L = 8, R = 10, T = 22, B = 22, lanes = 20;
+    const X = t => L + (t - t0) / win * (W - L - R);
+    const tick = win <= 10 ? 1 : win <= 30 ? 5 : 15;
+
+    ctx.font = `10.5px ${MONO}`;
+    ctx.textBaseline = 'alphabetic';
+    ctx.strokeStyle = C.line; ctx.fillStyle = C.muted; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(L, H - B + 0.5); ctx.lineTo(W - R, H - B + 0.5); ctx.stroke();
+    for (let k = 0; k <= win; k += tick) {
+      const xx = X(t1 - k);
+      ctx.beginPath(); ctx.moveTo(xx, H - B); ctx.lineTo(xx, H - B + 4); ctx.stroke();
+      const txt = k === 0 ? '现在' : `-${k}s`;
+      ctx.textAlign = k === 0 ? 'right' : 'center';
+      ctx.fillText(txt, k === 0 ? xx : xx, H - 6);
+    }
+
+    ctx.textAlign = 'center';
+    let lastLabelX = -1e9;
+    for (const r of S.refreshMarks) {
+      if (r < t0) continue;
+      const xx = Math.round(X(r)) + 0.5;
+      ctx.save(); ctx.strokeStyle = C.accent; ctx.globalAlpha = 0.55; ctx.setLineDash([3, 3]);
+      ctx.beginPath(); ctx.moveTo(xx, T - 4); ctx.lineTo(xx, H - B); ctx.stroke(); ctx.restore();
+      if (xx - lastLabelX > 64 && xx < W - 30) { ctx.fillStyle = C.accent; ctx.fillText('refresh', xx, T - 8); lastLabelX = xx; }
+    }
+
+    const vis = S.marks.filter(d => (d.tVis ?? d.tGone ?? t1) >= t0);
+    const k = Math.max(1, Math.ceil(vis.length / 700));
+    const laneH = (H - T - B) / lanes;
+    ctx.lineWidth = 1.5;
+    for (const d of vis) {
+      if (d.id % k) continue;
+      const y = T + (d.id % lanes + 0.5) * laneH;
+      const endT = d.tVis ?? d.tGone ?? t1;
+      const col = d.tVis !== null ? C.live : d.tGone !== null ? C.del : C.buffer;
+      ctx.strokeStyle = col; ctx.fillStyle = col;
+      ctx.globalAlpha = d.tVis !== null ? 0.55 : 0.9;
+      ctx.beginPath(); ctx.moveTo(X(Math.max(d.tIns, t0)), y); ctx.lineTo(X(endT), y); ctx.stroke();
+      ctx.globalAlpha = 1;
+      if (d.tIns >= t0) ctx.fillRect(X(d.tIns) - 1.5, y - 1.5, 3, 3);
+    }
+    ctx.globalAlpha = 1;
+    $('tlNote').textContent = `窗口 ${win}s · 每 ${k} 篇画 1 条`;
+  }
+
+  // ---- 文本面板 ----
+  const fmt = s => s.toFixed(2) + 's';
+  function ui() {
+    let count = 0, deleted = 0;
+    for (const s of S.segs) for (const d of s.docs) d.del ? deleted++ : count++;
+    $('sTime').textContent = S.t.toFixed(1) + 's';
+    $('sSegs').textContent = S.segs.length;
+    $('sCount').textContent = count;
+    $('sDeleted').textContent = deleted;
+    $('sRatio').textContent = (count + deleted ? Math.round(deleted / (count + deleted) * 100) : 0) + '%';
+    $('sBuffer').textContent = S.buffer.length;
+    $('sMerges').textContent = S.tot.merges;
+    $('sPurged').textContent = S.tot.purged;
+
+    const recent = S.lat.slice(-300);
+    if (recent.length) {
+      const avg = recent.reduce((a, b) => a + b, 0) / recent.length;
+      const max = Math.max(...recent);
+      $('latAvg').textContent = fmt(avg);
+      $('latMore').textContent = `最大 ${fmt(max)} · GET 按 ID ≈ 0s`;
+    } else {
+      $('latAvg').textContent = '–';
+      $('latMore').textContent = P.refresh > 0 ? '等待第一次 refresh' : '自动 refresh 已关闭';
+    }
+
+    const p = S.probe;
+    if (p) {
+      const age = S.t - p.tIns;
+      const searchRow = p.tVis !== null
+        ? `<span class="st ok">hits: 1</span> · 写入后 ${fmt(p.tVis - p.tIns)} 才搜到`
+        : `<span class="st wait">hits: 0</span> · 等待 refresh，已过 ${fmt(age)}${P.refresh > 0 ? '' : '（自动 refresh 已关闭，请手动 refresh）'}`;
+      $('probeOut').innerHTML =
+        `<li><code>PUT /orders/_doc/${p.id}</code><br><span class="st ok">201 created</span> · t=${p.tIns.toFixed(2)}s</li>` +
+        `<li><code>GET /orders/_doc/${p.id}</code><br><span class="st ok">found: true</span> · realtime 读取，时差 ≈ 0</li>` +
+        `<li><code>GET /orders/_search?q=id:${p.id}</code><br>${searchRow}</li>`;
+    }
+
+    $('log').innerHTML = S.log.slice(0, 9).map(e => {
+      const tag = { refresh: 'refresh', merge: 'merge', flush: 'flush', op: '操作' }[e.kind];
+      return `<li><time>${e.t.toFixed(2)}s</time><span><b class="k-${e.kind}">${tag}</b> ${e.text.replace(/^[^：]+：/, '')}</span></li>`;
+    }).join('');
+  }
+
+  // ---- 控件 ----
+  let running = !matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const playBtn = $('play');
+  const syncPlay = () => { playBtn.textContent = running ? '暂停' : '继续'; };
+  playBtn.addEventListener('click', () => { running = !running; syncPlay(); });
+  $('reset').addEventListener('click', () => { reset(); step(6); ui(); });
+  $('rate').addEventListener('input', e => { P.rate = +e.target.value; $('rateOut').textContent = P.rate + ' 篇/s'; });
+  $('del').addEventListener('input', e => { P.del = +e.target.value; $('delOut').textContent = P.del + ' 篇'; });
+  $('refresh').addEventListener('change', e => { P.refresh = +e.target.value; S.lastRefresh = S.t; });
+  $('speed').addEventListener('change', e => { P.speed = +e.target.value; });
+  $('manualRefresh').addEventListener('click', () => { refresh(S.t, true); ui(); });
+  $('expunge').addEventListener('click', () => {
+    const list = S.segs.filter(s => !s.merging && s.docs.length && delCount(s) / s.docs.length > CFG.expungePct);
+    S.queue.push(...list);
+    log(S.t, `操作：_forcemerge?only_expunge_deletes=true，${list.length} 个 segment 的删除占比超过 ${CFG.expungePct * 100}%`, 'op');
+    maybeMerge(S.t); ui();
+  });
+  $('probe').addEventListener('click', () => {
+    S.probe = insert(S.t, true);
+    log(S.t, `操作：写入探针文档 #${S.probe.id}`, 'op');
+    ui();
+  });
+
+  // ---- 启动：先预跑 6 秒，首帧即有内容 ----
+  reset();
+  step(6);
+  syncPlay();
+  ui();
+  let last = performance.now(), lastUI = 0;
+  function frame(now) {
+    const dt = Math.min(0.1, (now - last) / 1000);
+    last = now;
+    if (running) step(dt * P.speed);
+    drawSegs();
+    drawTimeline();
+    if (now - lastUI > 150) { ui(); lastUI = now; }
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+})();
+</script>
