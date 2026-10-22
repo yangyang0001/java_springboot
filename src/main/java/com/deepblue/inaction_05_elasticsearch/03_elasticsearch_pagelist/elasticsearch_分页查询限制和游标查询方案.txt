@@ -19,6 +19,18 @@ GET /order_index/_search
   ```
   Result window is too large, from + size must be less than or equal to: [10000] but was [10010].
   ```
+- 参数含义：
+  - `from`：跳过前面多少条命中结果（偏移量，从 0 开始），默认 0。
+  - `size`：本次返回多少条结果（每页条数），默认 10。
+  - 换算公式：`from = (pageNo - 1) * pageSize`，`size = pageSize`。
+    例如每页 10 条查第 3 页：`from = 20, size = 10`，返回第 21~30 条。
+  - 上面报错中的 `10010` 就是 `from=10000, size=10`，即想取第 10001~10010 条，相当于每页 10 条翻到第 1001 页。
+- 注意：这个限制和索引里存了多少数据无关，限制的是**单次查询的 `from + size` 不能超过 10000**，
+  即用 from/size 分页最多只能取到第 10000 条命中结果。
+  - 索引有 1 亿条，查 `from=0, size=10`：正常。
+  - 命中 50 万条，每页 10 条翻第 1~1000 页：正常；翻第 1001 页（`from=10000, size=10`）：报错。
+  - 一次取 `from=0, size=10001`：也报错（0 + 10001 > 10000）。
+  - 要访问 1 万条之后的数据，应使用 `search_after` 或 scroll，而不是调大 from/size。
 - 可以调大，但**不推荐**：
   ```
   PUT /order_index/_settings
