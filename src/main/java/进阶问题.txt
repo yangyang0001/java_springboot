@@ -628,6 +628,104 @@ Redis:
 		    · 如果锁是为了正确性 (绝对不能同时执行), 不能只依赖 Redis 锁, 要在资源层面做 fencing / 幂等校验;
 		      或者使用 ZooKeeper / etcd 这种基于共识协议的锁 (临时节点 + 会话), 但它们同样会受到 GC 停顿的影响, 依然需要 fencing。
 
+	3. RedisController 中的几种加锁方式是线程安全的吗? Redisson 真的安全吗? 使用锁最合理的方式
+		代码: src/main/java/com/deepblue/inaction_01_springboot2/chapter_12/controller/RedisController.java
+		- 结论: 两种写法都不能算真正安全。/redis_lock 有明确的并发 bug; /killWithRedisson 用对了 Redisson 的机制, 但写法有坑;
+		  Redisson 本身在单个 Redis 节点上是可靠的, 但遇到主从切换、长时间 GC 停顿时, 依然可能有两个持有者。
+
+		- /redis_lock (setIfAbsent + delete): 不安全
+		    · 加锁 setIfAbsent(KEY, value, 10, SECONDS) 对应 SET NX EX, 是原子的, 没问题;
+		    · 删锁不判断是不是自己的锁: 直接 redisTemplate.delete(KEY), 生成的 UUID 没用上。
+		        A 业务超过 10s → 锁过期 → B 加锁成功 → A 执行完把 B 的锁删掉 → C 又能进来;
+		    · 没有续期: 业务时间不确定时, 10s 可能不够, 锁中途过期;
+		    · delete 不在 finally 中: 业务抛异常时锁不会被释放, 只能等它自己过期;
+		    · if (lockFlag) 自动拆箱: pipeline / 事务中 setIfAbsent 返回 null, 直接 NPE。
+		    · 修正: 解锁用 Lua 脚本, 先比较 value, 相等再删除:
+		        if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end
+		      修正后依然没有续期、不可重入, 自己实现比较麻烦, 所以一般直接用 Redisson。
+
+		- /killWithRedisson (redissonClient.getLock + lock): 机制对, 写法有坑
+		    · Redisson 已经做好的:
+		        加锁 / 解锁都用 Lua 脚本, 原子操作;
+		        锁中记录 UUID:threadId, 只有持有锁的线程才能解锁, 不会误删别人的锁;
+		        可重入: 底层是 hash 结构, field = UUID:threadId, value = 重入次数;
+		        看门狗: 不指定 leaseTime 时, 默认锁 30s (lockWatchdogTimeout), 每 10s 续期一次, 业务再长也不会中途过期;
+		        等待锁时订阅解锁的 channel, 不是空转自旋。
+		    · 代码的问题:
+		        lock.lock() 写在 try 里面: lock() 自己失败 (Redis 连接异常、线程中断) 时, finally 依然调用 unlock(),
+		          抛出 IllegalMonitorStateException, 把原来的异常覆盖掉;
+		        lock != null 的判断没有意义, getLock 不会返回 null;
+		        锁名直接用 productNo, 可能和商品数据的 key 冲突, 应该加前缀, 例如 lock:product:{productNo};
+		        秒杀场景用 lock() 会一直阻塞等待, 请求堆积, 应该用 tryLock(waitTime) 等不到就快速失败;
+		        异常被吞掉, 直接返回 0, 调用方分不清是 "没抢到" 还是 "出错了"。
+
+		- Redisson 真的安全吗? 单节点 + 无长时间停顿时安全, 以下情况依然会出现两个持有者 (详见第 2 题):
+		    · 主从异步复制: A 在 Master 加锁成功, 还没同步到 Slave 就宕机, Slave 升为 Master 后没有这把锁, B 也能加锁;
+		      Sentinel 和 Cluster 模式都有这个问题;
+		    · 长时间 GC 停顿: 看门狗线程在同一个 JVM 中, STW 时一起停下来, 停顿超过 30s 锁过期, B 拿到锁, A 恢复后继续写;
+		    · 网络分区: A 连不上 Redis, 无法续期, 锁过期了, 但 A 的业务还在执行;
+		    · RedLock 也不行: Redisson 新版本已把 RedissonRedLock 标记为废弃, 它依赖时钟, 且没有 fencing token。
+
+		- 使用锁最合理的方式 (RedissonClient API)
+		    · 常用 API:
+		        RLock lock = redissonClient.getLock(name);       可重入锁 (非公平)
+		        RLock lock = redissonClient.getFairLock(name);   公平锁 (按请求顺序获取)
+		        RReadWriteLock rw = redissonClient.getReadWriteLock(name);  读写锁: rw.readLock() / rw.writeLock()
+		        RLock lock = redissonClient.getMultiLock(lock1, lock2);     联锁: 所有锁都加成功才算成功
+
+		        lock.lock()                          阻塞等待, 看门狗自动续期
+		        lock.lock(leaseTime, unit)           阻塞等待, leaseTime 后自动释放, 没有看门狗
+		        lock.lockInterruptibly()             阻塞等待, 可以响应中断
+		        lock.tryLock()                       只尝试一次, 立刻返回
+		        lock.tryLock(waitTime, unit)         最多等待 waitTime, 看门狗自动续期          ← 推荐
+		        lock.tryLock(waitTime, leaseTime, unit)  最多等待 waitTime, leaseTime 后自动释放, 没有看门狗
+		        lock.isHeldByCurrentThread()         当前线程是否持有这把锁
+		        lock.unlock()                        释放锁 (重入几次就要释放几次)
+		        注意: 只要传了 leaseTime (不等于 -1), 看门狗就不会生效。
+
+		    · 推荐写法:
+		        RLock lock = redissonClient.getLock("lock:product:" + productNo);  // 1. 锁名加业务前缀, 粒度细到具体资源
+		        boolean locked;
+		        try {
+		            locked = lock.tryLock(3, TimeUnit.SECONDS);                     // 2. 限时等待, 不传 leaseTime 让看门狗续期
+		        } catch (InterruptedException e) {
+		            Thread.currentThread().interrupt();                             // 3. 恢复中断标记
+		            return 0;
+		        }
+		        if (!locked) {
+		            return 0;                                                       // 4. 没抢到锁快速失败, 返回 "系统繁忙"
+		        }
+		        try {
+		            return productService.minusProduct(productNo, killNum);         // 5. 锁内只放必须互斥的逻辑, 越短越好
+		        } finally {
+		            if (lock.isHeldByCurrentThread()) {                             // 6. 只释放自己持有的锁
+		                lock.unlock();
+		            }
+		        }
+
+		    · 要点:
+		        1. 加锁放在 try 之前, 加锁成功后才进入 try / finally;
+		        2. 用 tryLock(waitTime, unit), 不要无限等待; 不传 leaseTime, 由看门狗续期;
+		           只有能确定业务最长耗时时才用 leaseTime (例如定时任务防重复执行);
+		        3. unlock 放在 finally 中, 并用 isHeldByCurrentThread() 判断, 避免锁已过期或没加上时抛异常;
+		        4. 锁名带业务前缀, 锁住具体资源 (一个商品一把锁), 不要所有请求共用一把锁;
+		        5. 锁内不要做远程调用、发 MQ 等耗时操作, 缩短持锁时间;
+		        6. 和 @Transactional 一起用时, 加锁要放在事务外面 (先加锁再开事务, 事务提交后再释放锁),
+		           否则锁释放了事务还没提交, 下一个线程读到的是旧数据;
+		        7. 正确性要靠数据层兜底, 锁只用来减少冲突。例如扣库存:
+		             UPDATE product SET stock = stock - #{killNum}
+		             WHERE product_no = #{productNo} AND stock >= #{killNum}
+		           返回影响行数为 0 就是库存不足; 这样即使锁失效、两个请求同时进来, 也不会超卖。
+		           其它兜底方式: 乐观锁 version、唯一索引防重复下单、状态机条件更新;
+		        8. 必须强一致时使用 ZooKeeper / etcd 的锁, 并配合 fencing token (ZK 的 zxid、etcd 的 revision)。
+
+		- 同一个文件中另外两处并发问题:
+		    · /set_nickname_zset (滑动窗口限流): zCard 统计和 add 写入是两步操作, 并发请求可能超过 5 次的限制;
+		      同一毫秒的两次请求 member 相同会被去重。应该用 Lua 把 "清理 + 计数 + 添加" 合成一个原子操作, member 用 UUID。
+		    · /redis_watch: setEnableTransactionSupport(true) 修改的是单例 redisTemplate 的全局状态, 会影响所有并发请求;
+		      watch(key) 写在 SessionCallback 外面, 和 multi / exec 不一定是同一个连接, WATCH 可能根本不生效。
+		      应该在 SessionCallback 的 execute() 中依次调用 watch → multi → exec, 并去掉全局开关。
+
 MySQL:
 	1. 回表的概念 给出动态图 MySQL_1_回表_动态图.html
 		- InnoDB 的索引都是 B+ 树:
