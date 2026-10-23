@@ -775,6 +775,65 @@ MySQL:
 		      改用唯一索引 + INSERT ... ON DUPLICATE KEY UPDATE 或 INSERT IGNORE;
 		    · 事务尽量短小, 尽快提交释放锁。
 
+	3. 表锁, 间隙锁, 行锁(记录锁) 给出升级过程 以及降级过程, 以及触发点! 给出动态图 MySQL_3_锁升级和降级_动态图.html
+		- 先纠正一个常见误解: InnoDB 没有 "行锁自动升级为表锁" 的机制。
+		    · SQL Server 中一条语句持有的行锁太多 (约 5000 个) 会自动升级为表锁;
+		    · InnoDB 的行锁按页用 bitmap 存储, 锁住很多行内存占用也很小, 所以不需要升级;
+		    · InnoDB 的表锁只来自: LOCK TABLES、DDL 的 MDL 锁、AUTO-INC 锁, 以及加行锁前自动加的意向锁 (IS / IX)。
+		  所以这里说的 "升级 / 降级" 指的是 锁的范围变大 / 变小, 以及 锁的模式 S → X。
+		- 锁的范围从大到小:
+		    表锁 > 全部行 + 间隙 (没走索引, 效果相当于锁表) > Next-Key 锁 (左开右闭) > 间隙锁 (开区间) > 记录锁 (只锁一行)
+		  RR 下当前读加锁的基本单位是 Next-Key Lock, 然后根据索引和查询条件决定是否 "退化"。
+
+		- 升级 (锁的范围变大) 及触发点:
+		    ① Next-Key → 全部行 + 全部间隙 (相当于锁表)
+		        触发点: 当前读 / UPDATE / DELETE 的条件没走索引, 只能扫描主键索引, 扫描到的每条记录都加 Next-Key, 最后连 supremum 也锁上。
+		          · 条件列没有索引;
+		          · 索引失效: 隐式类型转换 (varchar 列 = 数字)、对索引列用函数或运算 (DATE(ctime) = ...)、LIKE '%abc'、
+		            联合索引不满足最左前缀、OR 有一边没索引;
+		          · 区分度太低, 优化器认为全表扫描更快;
+		          · UPDATE / DELETE 不带 WHERE。
+		        结果: 不相关的行也不能改, 任何位置都不能插入; 但表级其实只有 IX, 不是真正的表锁。
+		        例: t(id PK, name 无索引), UPDATE t SET age = 1 WHERE name = 'Tom';
+		            → (-∞,5] (5,10] (10,20] (20,25] (25,+∞] 全部被锁, 别的事务 UPDATE id = 5 也要等待。
+		    ② 行锁 → 表锁: InnoDB 不会自动发生, 只有显式加表锁时才有:
+		          · LOCK TABLES t READ / WRITE: 加表级 S / X 锁, 和其它事务的 IX / IS 冲突;
+		          · DDL (ALTER TABLE 等) 要加 MDL 写锁: 要等所有持有 MDL 读锁的事务结束 (任何 SELECT / DML 都持有 MDL 读锁, 事务结束才释放),
+		            排队期间后面所有的读写都排在它后面 → 一个长事务 + 一个 DDL 就能让整张表不可用;
+		          · AUTO-INC 锁: innodb_autoinc_lock_mode = 0 时, 或 = 1 时的批量插入 (INSERT ... SELECT), 插入期间持有表级自增锁。
+		        意向锁的作用: 加表锁时只看表上的 IS / IX 就知道有没有行被锁, 不用逐行检查。
+		          兼容性: IS、IX 之间互相兼容; IX 和表级 S、X 冲突; IS 和表级 X 冲突。
+		    ③ 锁模式升级 S → X
+		        触发点: 同一行先 SELECT ... LOCK IN SHARE MODE (8.0 为 FOR SHARE), 再 UPDATE / DELETE。
+		          A、B 都持有 S, 都要升级为 X, 互相等待 → 死锁 (ERROR 1213)。
+		        另一个常见场景: 多个事务 INSERT 同一个唯一键, 冲突时先加 S 锁, 第一个事务回滚后其余事务同时升级为 X → 死锁。
+
+		- 降级 (锁的范围变小, 也叫 "退化") 及触发点:
+		    ① Next-Key → 记录锁
+		        触发点: 唯一索引 (主键 / 唯一键) 等值查询, 且记录存在。
+		        例: SELECT * FROM t WHERE id = 10 FOR UPDATE;  先加 (5,10], 退化为只锁记录 10, 间隙 (5,10) 可以插入。
+		    ② Next-Key → 间隙锁
+		        触发点: 唯一索引等值查询但记录不存在; 或者等值查询向右遍历到第一个不满足条件的值 (非唯一索引也是如此)。
+		        例: SELECT * FROM t WHERE id = 15 FOR UPDATE;  先加 (10,20], 20 不满足条件, 退化为间隙锁 (10,20)。
+		    ③ 不加间隙锁 / 提前释放
+		        触发点: 隔离级别改为 RC。
+		          · RC 不使用间隙锁 (外键检查、唯一键冲突检查除外);
+		          · 没走索引时仍然逐行加锁, 但不满足条件的行在 server 层过滤后立刻释放, 最后只剩匹配行的记录锁。
+		            这是 InnoDB 中唯一一种 "事务没结束就提前放锁" 的情况, RR 下不满足条件的行也会一直锁到事务结束。
+
+		- 注意: 已经持有的锁不会降级。
+		    · X 锁不会变成 S 锁, 范围也不会缩小; InnoDB 遵循两阶段锁, 事务提交或回滚时统一释放;
+		    · 上面说的 "降级" 是指加锁时就退化成更小的范围, 而不是先加大锁、过一会儿再变小。
+
+		- 如何避免锁范围扩大:
+		    · 当前读和 UPDATE / DELETE 一定要走索引, 上线前用 EXPLAIN 确认 type 不是 ALL;
+		    · 尽量用主键或唯一索引等值命中已有记录, 让锁退化为记录锁;
+		    · 可以接受幻读时使用 RC (配合 binlog_format = ROW);
+		    · 要修改的数据读的时候直接用 FOR UPDATE 加 X 锁, 不要 "先 S 后 X";
+		    · DDL 放在低峰期, 执行前查 information_schema.innodb_trx 确认没有长事务, 并设置较小的 lock_wait_timeout;
+		    · 事务尽量短小, 尽快提交。
+
+    3. 表锁, 间隙锁, 行锁(记录锁) 给出升级过程 以及降级过程, 以及触发点! 给出动态图 MySQL_3_锁升级和降级_动态图.html, 顺便给出一个答案
 
 ES:
 	查询的时候 有什么风险? 深度分页什么情况下会出现 10000 的报错, 如何避免? 给出动态图 ES_1_深度分页_动态图.html
@@ -800,3 +859,36 @@ ES:
 		    · scroll: 生成快照遍历全量数据, 适合离线导出, 不适合实时的用户分页 (占用资源, 官方已不推荐用于深度分页);
 		    · 不推荐直接调大 index.max_result_window, 只是推迟问题, 会增加内存和 CPU 压力。
 		    · 详见: src/main/java/com/deepblue/inaction_05_elasticsearch/03_elasticsearch_pagelist/elasticsearch_分页查询限制和游标查询方案.txt
+
+
+Dubbo:
+	1. dubbo 中的 service 和 方法在 zookeeper 中放在什么节点中? 给出动态图 Dubbo_1_zookeeper存放方式_动态图.html
+		- 节点结构 (Dubbo 2.x 接口级注册):
+		    /dubbo-group                                    根节点, 取自 dubbo.registry.group, 默认 /dubbo       (持久)
+		      └─ /com.deepblue.api.EchoService              服务接口的全限定名, 一个接口一个节点               (持久)
+		           ├─ /providers/dubbo%3A%2F%2F...          每个提供者实例一个节点, 节点名是 URL 编码后的整条 URL (临时, dynamic=true 时)
+		           ├─ /consumers/consumer%3A%2F%2F...       每个消费者实例一个节点                              (临时)
+		           ├─ /configurators/override%3A%2F%2F...   动态配置: 权重、禁用、超时等, dubbo-admin 写入        (持久)
+		           └─ /routers/route%3A%2F%2F...            路由规则                                            (持久)
+		- service 放在哪: 接口全限定名就是节点名; 服务的 version、group 不是路径层级, 而是 URL 里的参数, 由消费者在本地过滤。
+		- 方法放在哪: 方法不单独占节点, 方法名去重后写在提供者 URL 的参数里, 例如本项目:
+		    dubbo://127.0.0.1:20882/com.deepblue.api.EchoService?...&interface=com.deepblue.api.EchoService&methods=sayHello&...
+		    · EchoService 有 sayHello() 和 sayHello(String) 两个重载, URL 中只有一个 methods=sayHello;
+		    · 但调用时 RpcInvocation 带着方法名 + 参数类型, 所以重载方法照样能正确调用;
+		      受影响的只是按方法名做的配置 (例如 <dubbo:method name="sayHello" timeout="..."/>), 它区分不了重载;
+		    · 完整的方法签名 (参数类型、返回值) 在 2.7+ 的元数据中心里, 不在注册中心。
+		- 注册和订阅流程:
+		    1. Provider 启动: 创建 /{group}/{接口}/providers 等持久目录节点, 再把自己的 URL 编码后作为临时节点写到 providers 下;
+		    2. Consumer 启动: 在 consumers 下写自己的 URL, 并对 providers、configurators、routers 调用 getChildren + watcher;
+		    3. 拿到的 URL 转成本地的 Invoker 列表, 每次调用在本地做负载均衡, 直连 Provider, 不经过 ZooKeeper;
+		    4. Provider 宕机: 会话过期 → 临时节点被删除 → Consumer 收到 NodeChildrenChanged → 重新 getChildren 并刷新 Invoker 列表;
+		    5. ZooKeeper 整体不可用时, Consumer 继续使用内存和本地缓存文件 (~/.dubbo/dubbo-registry-*.cache) 中的地址调用,
+		       只是感知不到上下线。
+		- 本项目的问题: 提供者 URL 中带有 dynamic=false (见 inaction_06_paxos_zookeeper/Zookeeper集群的安装.txt 的 ls 结果)。
+		    · 注册时执行 zkClient.create(path, url.getParameter("dynamic", true)), 第二个参数表示是否为临时节点,
+		      dynamic=false 时创建的是 持久节点, 用 stat 查看 ephemeralOwner = 0x0 即可确认;
+		    · 后果: Provider 宕机后节点不会被删除, Consumer 收不到下线通知; 重启后 pid、timestamp 变化, 又多出一个新节点, 旧节点一直残留;
+		    · 项目没有显式配置 dynamic, 这个值来自 2.7.1 注解的默认值; 修复: @Service(interfaceName = "echoService", dynamic = true)
+		      或升级 Dubbo, 然后手动删除残留节点。
+		- Dubbo 3 新增应用级服务发现: /services/{应用名}/{ip:port} 存实例, /dubbo/mapping/{接口} 存接口到应用名的映射,
+		  节点数量从 "接口数 × 实例数" 降到 "应用数 × 实例数"。
