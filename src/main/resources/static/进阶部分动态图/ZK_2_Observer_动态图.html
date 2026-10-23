@@ -19,8 +19,8 @@
 <div class="wrap">
   <header>
     <p class="eyebrow">ZooKeeper · 2 · Observer</p>
-    <h1>Observer：当队员，不当裁判</h1>
-    <p class="lede">Observer 和 Follower 一样从 Leader 同步数据、处理读请求、把写请求转发给 Leader，这是“当队员”；但它不参与 Leader 选举投票，也不参与写操作的过半 ACK，这是“不当裁判”。所以加再多 Observer，写入和选举都不会变慢。</p>
+    <h1>Observer：只观察，不投票</h1>
+    <p class="lede">Observer 只是“观察者”：它从 Leader 同步数据、处理读请求、把写请求转发给 Leader；但它不参与 Leader 选举（既不投票，也不能被选为 Leader），也不参与写操作的过半 ACK。所以加再多 Observer，写入和选举都不会变慢。</p>
   </header>
 
   <section class="controls" id="controls" aria-label="播放控制"></section>
@@ -70,7 +70,7 @@
       </table>
     </div>
     <ul style="margin-top:10px">
-      <li>结论：当队员，不当裁判。同步数据、处理读请求、转发写请求，但不投票。</li>
+      <li>结论：只观察，不投票。同步数据、处理读请求、转发写请求，但不参与选举、不参与过半 ACK。</li>
       <li>扩展读能力而不影响写性能：投票节点越多，写操作等待的“过半”确认越慢、选举也越慢；Observer 不投票，加多少都不拖慢写入和选举。</li>
       <li>跨机房部署：远程机房放 Observer 提供本地读，跨机房延迟不会影响投票。</li>
       <li>Observer 宕机不影响集群可用性（不计入过半数）。配置：节点自身 <code>peerType=observer</code>，集群配置 <code>server.4=host:2888:3888:observer</code>。</li>
@@ -106,12 +106,12 @@
       state: { nodes: base(V0), client: '客户端', clientCls: '', info: [['投票成员 3 个（S1 + S2 + S3），过半 = 3/2 + 1 = 2', ''], ['Observer 2 个（S4、S5），不计入过半数', 'c-violet']] },
       steps: [
         { title: '初始：1 Leader + 2 Follower + 2 Observer', line: [2, 3, 4, 5, 6],
-          desc: '<p>只有 Leader 和 Follower 是 <b>投票成员</b>（裁判），过半数按它们算：3 个投票成员，过半 = 2。</p><p>Observer 同样保存完整数据（<code>zxid 0x1, x=0</code>），但不投票。</p>' },
+          desc: '<p>只有 Leader 和 Follower 是 <b>投票成员</b>，过半数按它们算：3 个投票成员，过半 = 2。</p><p>Observer 同样保存完整数据（<code>zxid 0x1, x=0</code>），但不投票。</p>' },
         { title: '客户端把写请求发给 Observer S5',
           desc: '<p>客户端连在 S5 上，执行 <code>set /x 1</code>。</p><p>任何节点都能接收客户端连接，Observer 也不例外。</p>',
           set: { nodes: { S5: { cls: 'box accent' } } }, fly: [['C', 'S5', 'set /x 1', 'accent']] },
         { title: 'S5 把写请求转发给 Leader',
-          desc: '<p>写请求（事务请求）只能由 Leader 处理。Observer 和 Follower 一样，<b>原样转发给 Leader</b>。</p><p>这一步是“当队员”：帮客户端跑腿。</p>',
+          desc: '<p>写请求（事务请求）只能由 Leader 处理。Observer 和 Follower 一样，<b>原样转发给 Leader</b>。</p><p>这只是帮客户端跑腿，并不参与决策。</p>',
           set: { nodes: { S5: { cls: 'box violet' }, S1: { cls: 'box accent' } } }, fly: [['S5', 'S1', 'REQUEST', 'accent']] },
         { title: 'Leader 发起提案：PROPOSAL 只发给 Follower',
           desc: '<p>Leader 分配新的事务 ID <code>zxid 0x2</code>，写入自己的事务日志，然后把 <b>PROPOSAL</b> 发给 S2、S3。</p><p class="warn">Observer 收不到 PROPOSAL，也就无需回 ACK。</p>',
@@ -135,9 +135,9 @@
           desc: '<p>客户端执行 <code>get /x</code>，S5 <b>直接读本地内存</b> 返回，不经过 Leader，也不需要投票。</p><p>读请求可以分摊到任意节点，这就是加 Observer 能提高读能力的原因。需要读到最新值时可先调用 <code>sync()</code>。</p>',
           set: { nodes: { S2: { cls: 'box' }, S3: { cls: 'box' }, S4: { cls: 'box violet' }, S5: { cls: 'box accent' } } },
           fly: [['C', 'S5', 'get /x', 'accent']], back: [['S5', 'C', 'x=1', 'ok']] },
-        { title: '小结：当队员，不当裁判',
-          desc: '<p class="ok">当队员：同步数据、处理读、转发写。</p><p class="bad">不当裁判：没收到 PROPOSAL，没回 ACK，不计入过半。</p>',
-          set: { nodes: { S5: { cls: 'box violet' } }, info: [['当队员：同步数据 · 处理读 · 转发写', 'c-ok'], ['不当裁判：不投票 · 不参与过半 ACK', 'c-bad']] }, dwell: 3600 },
+        { title: '小结：只观察，不投票',
+          desc: '<p class="ok">能做：同步数据、处理读、转发写。</p><p class="bad">不做：不参与选举，没收到 PROPOSAL，没回 ACK，不计入过半。</p>',
+          set: { nodes: { S5: { cls: 'box violet' } }, info: [['能做：同步数据 · 处理读 · 转发写', 'c-ok'], ['不做：不选举 · 不投票 · 不参与过半 ACK', 'c-bad']] }, dwell: 3600 },
       ],
     },
     {
@@ -162,7 +162,7 @@
           desc: '<p>S3 收到 2 票（S2 + 自己），达到过半 2，成为新 Leader；S2 成为 Follower。</p><p>整个过程只有投票成员参与，<b>Observer 数量多少都不影响选举速度</b>。</p>',
           set: { nodes: { S2: { role: 'F' }, S3: { role: 'L' } }, leader: 'S3', info: [['选票：S2 → S3，S3 → S3   2 / 3 ≥ 过半', 'c-ok'], ['Observer 的票数：0（不参与）', 'c-violet']] } },
         { title: 'Follower 和 Observer 向新 Leader 同步',
-          desc: '<p>S2、S4、S5 连接新 Leader S3，对齐数据（差异同步 DIFF）。完成后集群恢复服务。</p><p>Observer 在这里重新“当队员”：同步数据，继续提供读。</p>',
+          desc: '<p>S2、S4、S5 连接新 Leader S3，对齐数据（差异同步 DIFF）。完成后集群恢复服务。</p><p>Observer 只是跟上新 Leader：同步数据，继续提供读。</p>',
           set: { nodes: { S4: { cls: '', sub: '' }, S5: { cls: '', sub: '' } }, info: [['新 Leader S3，集群恢复服务', 'c-ok'], ['投票成员只剩 2 个，刚好够过半', 'c-warn']] },
           fly: [['S3', 'S2', 'SYNC', 'ok'], ['S3', 'S4', 'SYNC', 'violet'], ['S3', 'S5', 'SYNC', 'violet']] },
         { title: '再挂一个 Follower：Observer 帮不上忙',
@@ -235,9 +235,9 @@
       POS = sc.pos;
       E = { box: {}, title: {}, sub: {}, data: {}, grp: {}, cross: {} };
       svg('rect', { x: 16, y: 26, width: 456, height: 316, rx: 12, class: 'zone vote' }, g);
-      svg('text', { x: 24, y: 18, class: 'small c-accent' }, g, '投票成员（裁判）：选举投票 + 写操作过半 ACK');
+      svg('text', { x: 24, y: 18, class: 'small c-accent' }, g, '投票成员：选举投票 + 写操作过半 ACK');
       svg('rect', { x: 488, y: 26, width: 256, height: 316, rx: 12, class: 'zone obs' }, g);
-      svg('text', { x: 496, y: 18, class: 'small c-violet' }, g, 'Observer（队员）：不投票');
+      svg('text', { x: 496, y: 18, class: 'small c-violet' }, g, 'Observer（观察者）：不选举、不投票');
       E.links = svg('g', {}, g);
       for (const id in POS) {
         const p = POS[id];

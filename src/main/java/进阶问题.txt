@@ -552,10 +552,10 @@ Zookeeper:
 		    · 临时顺序节点: 分布式锁 (序号最小的获得锁, 其它节点只 watch 自己的前一个节点, 避免羊群效应)、Leader 选举;
 		    · 持久节点: 配置中心。
 
-	2. Observer 节点作用; 当队员和当裁判吗? 给出动态图 ZK_2_Observer_动态图.html
-		- 结论: 当队员, 不当裁判。
-		    · 当队员: Observer 和 Follower 一样同步 Leader 的数据, 可以处理客户端的读请求, 写请求转发给 Leader;
-		    · 不当裁判: 不参与 Leader 选举的投票, 也不参与写操作的过半 ACK 确认 (只接收 INFORM 消息)。
+	2. Observer 节点作用; 参与选举和投票吗? 给出动态图 ZK_2_Observer_动态图.html
+		- 结论: 只观察, 不投票 (Observer 就是"观察者")。
+		    · 能做: 同步 Leader 的数据, 处理客户端的读请求, 写请求转发给 Leader;
+		    · 不做: 不参与 Leader 选举 (不投票, 也不能被选为 Leader), 也不参与写操作的过半 ACK 确认 (只接收 INFORM 消息)。
 		- ZK 集群三种角色:
 		    · Leader: 处理写请求 (事务请求), 发起提案, 负责集群调度;
 		    · Follower: 处理读请求, 转发写请求, 参与选举投票和写提案的投票;
