@@ -1,6 +1,5 @@
 package com.deepblue.inaction_100_source_algorithm_back.huawei.test_001.sum;
 
-import com.sun.deploy.security.SandboxSecurity;
 
 import java.util.Scanner;
 

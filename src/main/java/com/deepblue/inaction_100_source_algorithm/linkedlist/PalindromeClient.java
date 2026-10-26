@@ -1,7 +1,6 @@
 package com.deepblue.inaction_100_source_algorithm.linkedlist;
 
 import com.alibaba.fastjson.JSON;
-import org.bouncycastle.util.Arrays;
 
 /**
  *
